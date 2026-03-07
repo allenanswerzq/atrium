@@ -14,7 +14,7 @@ As AI gets better at writing code, the developer's job shifts from typing code t
 
 Atrium puts architecture at the center:
 
-1. **You see architecture, not files.** Open a project and see how crates, modules, types, and functions connect — at whatever depth you need.
+1. **You focus on architecture, not files.** Open a project and see how crates, modules, types, and functions connect — at whatever depth you need.
 2. **You think in architecture.** Plan changes by understanding structure, boundaries, and impact — before any code is touched.
 3. **Agents work from architecture.** When you direct an agent to make a change, it already knows the full architectural context — what depends on what, what will break, where to look.
 4. **You review architecture.** See what changed structurally, not just textually. Did the agent add a dependency? Change a public API boundary? Break an abstraction layer?
@@ -30,7 +30,7 @@ The developer becomes the architect. The agent becomes the builder.
 
 ## Built On
 
-Powered by [llmcc](https://github.com/allenanswerzq/llmcc) for fast, accurate architecture graph generation via tree-sitter parsing, symbol resolution, and dependency analysis.
+Powered by [llmcc](https://github.com/allenanswerzq/llmcc) for fast, accurate architecture graph generation.
 
 ## Status
 
