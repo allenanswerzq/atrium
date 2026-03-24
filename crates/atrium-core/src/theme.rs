@@ -4,9 +4,11 @@
 //! Each theme defines a palette of colors for the chrome, editor, and terminal.
 
 use serde::Serialize;
+use strum::{Display, IntoStaticStr};
 
 /// Available theme variants.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Display, IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum ThemeKind {
     One,
     Ayu,

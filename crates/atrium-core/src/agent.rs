@@ -1,18 +1,21 @@
 //! AI agent state and session detection.
 
 use serde::{Deserialize, Serialize};
+use strum::{Display, IntoStaticStr};
 
 /// Runtime state of an AI coding agent.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum AgentState {
     Working,
     Waiting,
 }
 
 /// Which AI agent provider a session belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum AgentProvider {
     Claude,
     Codex,

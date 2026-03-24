@@ -2,11 +2,13 @@
 
 use atrium_error::{Error, ErrorKind, Result};
 use serde::{Deserialize, Serialize};
+use strum::{Display, IntoStaticStr};
 use std::path::{Path, PathBuf};
 
 /// The kind of change detected for a file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ChangeKind {
     Added,
     Modified,
@@ -16,21 +18,6 @@ pub enum ChangeKind {
     TypeChange,
     Conflict,
     IntentToAdd,
-}
-
-impl std::fmt::Display for ChangeKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Added => write!(f, "added"),
-            Self::Modified => write!(f, "modified"),
-            Self::Removed => write!(f, "removed"),
-            Self::Renamed => write!(f, "renamed"),
-            Self::Copied => write!(f, "copied"),
-            Self::TypeChange => write!(f, "type_change"),
-            Self::Conflict => write!(f, "conflict"),
-            Self::IntentToAdd => write!(f, "intent_to_add"),
-        }
-    }
 }
 
 /// A file that has changed in the worktree.

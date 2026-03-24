@@ -5,6 +5,7 @@
 
 use crate::id::{SessionId, WorkspaceId};
 use serde::{Deserialize, Serialize};
+use strum::{Display, IntoStaticStr};
 use std::path::PathBuf;
 
 // ── Requests ────────────────────────────────────────────────────────
@@ -46,8 +47,9 @@ pub struct KillRequest {
 
 // ── Signals ─────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum TerminalSignal {
     Interrupt,
     Terminate,
@@ -56,8 +58,9 @@ pub enum TerminalSignal {
 
 // ── State ───────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum TerminalSessionState {
     #[default]
     Running,

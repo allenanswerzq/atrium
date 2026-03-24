@@ -1,11 +1,13 @@
 //! OS and architecture detection.
 
-use std::fmt;
+use strum::{Display, IntoStaticStr};
 
 /// Detected operating system.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum Os {
     Windows,
+    #[strum(serialize = "macos")]
     MacOs,
     Linux,
 }
@@ -31,18 +33,9 @@ impl Os {
     }
 }
 
-impl fmt::Display for Os {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Windows => f.write_str("windows"),
-            Self::MacOs => f.write_str("macos"),
-            Self::Linux => f.write_str("linux"),
-        }
-    }
-}
-
 /// Detected CPU architecture.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum Arch {
     X86_64,
     Aarch64,
@@ -58,16 +51,6 @@ impl Arch {
             Self::Aarch64
         } else {
             Self::Other
-        }
-    }
-}
-
-impl fmt::Display for Arch {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::X86_64 => f.write_str("x86_64"),
-            Self::Aarch64 => f.write_str("aarch64"),
-            Self::Other => f.write_str("other"),
         }
     }
 }
@@ -89,8 +72,8 @@ impl Platform {
     }
 }
 
-impl fmt::Display for Platform {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for Platform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}-{}", self.os, self.arch)
     }
 }

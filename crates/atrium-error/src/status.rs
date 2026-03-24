@@ -1,12 +1,13 @@
 //! Error status definitions for retry behavior.
 
-use std::fmt;
+use strum::{Display, IntoStaticStr};
 
 /// Indicates the retry behavior for an error.
 ///
 /// Helps callers decide whether to retry an operation without
 /// needing to understand the underlying error details.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Display, IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum ErrorStatus {
     /// The error is permanent and will not resolve without external changes.
     #[default]
@@ -20,13 +21,10 @@ pub enum ErrorStatus {
 }
 
 impl ErrorStatus {
+    /// Returns a human-readable description of the error status.
     #[must_use]
     pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Permanent => "permanent",
-            Self::Temporary => "temporary",
-            Self::Persistent => "persistent",
-        }
+        (*self).into()
     }
 
     #[must_use]
@@ -37,11 +35,5 @@ impl ErrorStatus {
     #[must_use]
     pub fn is_final(&self) -> bool {
         matches!(self, Self::Permanent | Self::Persistent)
-    }
-}
-
-impl fmt::Display for ErrorStatus {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.as_str())
     }
 }

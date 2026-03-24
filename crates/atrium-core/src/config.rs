@@ -77,8 +77,9 @@ pub struct BranchConfig {
     pub prefix: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, strum::Display, strum::IntoStaticStr)]
 #[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "snake_case")]
 pub enum BranchPrefixMode {
     None,
     GitAuthor,

@@ -1,10 +1,12 @@
 //! Managed process types and lifecycle.
 
 use serde::{Deserialize, Serialize};
+use strum::{Display, IntoStaticStr};
 
 /// Runtime status of a managed process.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ProcessStatus {
     Running,
     Restarting,
@@ -13,8 +15,9 @@ pub enum ProcessStatus {
 }
 
 /// Where a process definition came from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum ProcessSource {
     AtriumToml,
     Procfile,

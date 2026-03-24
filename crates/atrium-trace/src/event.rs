@@ -1,10 +1,12 @@
 //! Metric event types and categories for event routing.
 
 use serde::{Deserialize, Serialize};
+use strum::{Display, IntoStaticStr};
 
 /// Categories for routing events to different sinks.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum MetricCategory {
     /// Application-level custom events.
     Custom,
