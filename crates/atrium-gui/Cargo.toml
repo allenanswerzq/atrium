@@ -1,0 +1,35 @@
+[package]
+name = "atrium-gui"
+description = "GPUI desktop application for Atrium"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "Atrium"
+path = "src/main.rs"
+
+[dependencies]
+# Workspace crates
+atrium-core     = { workspace = true }
+atrium-error    = { workspace = true }
+atrium-context  = { workspace = true }
+atrium-executor = { workspace = true }
+atrium-fs       = { workspace = true }
+atrium-init     = { workspace = true }
+atrium-io       = { workspace = true }
+atrium-platform = { workspace = true }
+atrium-trace    = { workspace = true }
+
+# UI
+gpui = { workspace = true }
+
+# Serialization
+serde      = { workspace = true }
+serde_json = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+[lints]
+workspace = true

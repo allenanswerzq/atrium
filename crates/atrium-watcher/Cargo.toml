@@ -1,0 +1,19 @@
+[package]
+name = "atrium-watcher"
+description = "File change watcher with platform-specific backends and mtime fallback"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atrium-executor = { workspace = true }
+atrium-error    = { workspace = true }
+tokio   = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio    = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time"] }
+
+[lints]
+workspace = true
