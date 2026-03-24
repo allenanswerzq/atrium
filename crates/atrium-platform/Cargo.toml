@@ -1,0 +1,11 @@
+[package]
+name = "atrium-platform"
+description = "Platform-specific abstractions and detection for Atrium"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

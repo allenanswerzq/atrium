@@ -1,0 +1,22 @@
+[package]
+name = "atrium-core"
+description = "Core domain types, git operations, and architecture graph primitives for Atrium"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atrium-error = { workspace = true }
+atrium-fs    = { workspace = true }
+
+git2       = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+toml       = { workspace = true }
+tracing    = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

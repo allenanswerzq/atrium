@@ -1,0 +1,23 @@
+[package]
+name = "atrium-init"
+description = "Two-phase initialization for Atrium applications"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atrium-error    = { workspace = true }
+atrium-fs       = { workspace = true }
+atrium-io       = { workspace = true }
+atrium-executor = { workspace = true }
+atrium-context  = { workspace = true }
+atrium-trace    = { workspace = true }
+
+tokio   = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

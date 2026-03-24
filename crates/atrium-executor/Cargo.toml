@@ -1,0 +1,18 @@
+[package]
+name = "atrium-executor"
+description = "Task executor with graceful shutdown for Atrium"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+tokio        = { workspace = true, features = ["sync", "rt", "time"] }
+futures-util = { workspace = true }
+tracing      = { workspace = true }
+thiserror    = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["sync", "rt", "rt-multi-thread", "time", "macros"] }
+
+[lints]
+workspace = true

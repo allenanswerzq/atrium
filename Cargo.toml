@@ -1,0 +1,78 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/atrium-error",
+    "crates/atrium-trace",
+    "crates/atrium-fs",
+    "crates/atrium-io",
+    "crates/atrium-executor",
+    "crates/atrium-context",
+    "crates/atrium-init",
+    "crates/atrium-core",
+    "crates/atrium-platform",
+]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+version = "0.1.0"
+repository = "https://github.com/allenanswerzq/atrium"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_qualifications = "deny"
+
+[workspace.lints.clippy]
+expect_used = "deny"
+unwrap_used = "deny"
+
+[workspace.dependencies]
+# Workspace crates
+atrium-error    = { path = "crates/atrium-error", version = "0.1.0" }
+atrium-trace    = { path = "crates/atrium-trace", version = "0.1.0" }
+atrium-fs       = { path = "crates/atrium-fs", version = "0.1.0" }
+atrium-executor = { path = "crates/atrium-executor", version = "0.1.0" }
+atrium-context  = { path = "crates/atrium-context", version = "0.1.0" }
+atrium-io       = { path = "crates/atrium-io", version = "0.1.0" }
+atrium-init     = { path = "crates/atrium-init", version = "0.1.0" }
+atrium-core     = { path = "crates/atrium-core", version = "0.1.0" }
+atrium-platform = { path = "crates/atrium-platform", version = "0.1.0" }
+
+# Error handling
+anyhow  = "1"
+strum   = { version = "0.27", features = ["derive"] }
+
+# Serialization
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml       = "0.8"
+
+# Async
+tokio        = { version = "1", features = ["full"] }
+futures-util = { version = "0.3", features = ["std"] }
+async-trait  = "0.1"
+bytes        = "1"
+
+# Error
+thiserror = "2"
+
+# Git
+git2      = "0.20"
+gix       = "0.80"
+gix-diff  = { version = "0.60", features = ["blob-experimental"] }
+imara-diff = "0.2"
+
+# Tracing
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
+
+# Filesystem
+tempfile = "3"
+
+# Architecture graphs (llmcc)
+# llmcc-core     = { git = "https://github.com/allenanswerzq/llmcc", version = "0.2" }
+# llmcc-rust     = { git = "https://github.com/allenanswerzq/llmcc", version = "0.2" }
+# llmcc-ts       = { git = "https://github.com/allenanswerzq/llmcc", version = "0.2" }
+# llmcc-collect  = { git = "https://github.com/allenanswerzq/llmcc", version = "0.2" }
+# llmcc-dot      = { git = "https://github.com/allenanswerzq/llmcc", version = "0.2" }
+# llmcc-resolver = { git = "https://github.com/allenanswerzq/llmcc", version = "0.2" }
