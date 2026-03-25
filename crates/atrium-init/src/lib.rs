@@ -32,12 +32,13 @@ use atrium_executor::{TaskExecutor, TaskManager};
 use atrium_io::IoPool;
 use atrium_trace::SinkRouter;
 
-// ── Early Initialized (Phase 1) ────────────────────────────────────
+// ── Early Initialized (Phase 1) ────────────────────────────────────────
 
 struct EarlyInner {
     task_manager: TaskManager,
     ctxt: GlobalCtxt,
     io_pool: IoPool,
+    application: Option<gpui::Application>,
 }
 
 /// Handle to the early-initialized Atrium runtime.
@@ -68,6 +69,14 @@ impl EarlyInitialized {
     /// Get the I/O concurrency pool.
     pub fn io_pool(&self) -> &IoPool {
         &self.inner.io_pool
+    }
+
+    /// Take the GPUI Application out of the early-init handle.
+    ///
+    /// Can only be called once. Returns `None` if already taken.
+    pub fn take_application(&mut self) -> Option<gpui::Application> {
+        Arc::get_mut(&mut self.inner)
+            .and_then(|inner| inner.application.take())
     }
 
     /// Finalize into a fully initialized runtime.
@@ -176,6 +185,7 @@ pub async fn early_init() -> Result<EarlyInitialized> {
             task_manager,
             ctxt,
             io_pool,
+            application: Some(gpui::Application::new()),
         }),
     })
 }

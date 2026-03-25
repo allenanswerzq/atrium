@@ -5,10 +5,6 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
-[[bin]]
-name = "Atrium"
-path = "src/main.rs"
-
 [dependencies]
 # Workspace crates
 atrium-core     = { workspace = true }
@@ -16,7 +12,6 @@ atrium-error    = { workspace = true }
 atrium-context  = { workspace = true }
 atrium-executor = { workspace = true }
 atrium-fs       = { workspace = true }
-atrium-init     = { workspace = true }
 atrium-io       = { workspace = true }
 atrium-platform = { workspace = true }
 atrium-trace    = { workspace = true }

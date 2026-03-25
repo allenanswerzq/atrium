@@ -13,6 +13,7 @@ atrium-executor = { workspace = true }
 atrium-context  = { workspace = true }
 atrium-trace    = { workspace = true }
 
+gpui    = { workspace = true }
 tokio   = { workspace = true }
 tracing = { workspace = true }
 

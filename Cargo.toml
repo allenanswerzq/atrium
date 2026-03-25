@@ -12,6 +12,7 @@ members = [
     "crates/atrium-platform",
     "crates/atrium-watcher",
     "crates/atrium-gui",
+    "bin/atrium",
 ]
 
 [workspace.package]

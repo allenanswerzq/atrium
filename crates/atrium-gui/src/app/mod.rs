@@ -5,4 +5,4 @@ pub mod bootstrap;
 pub mod keybindings;
 pub mod window;
 
-pub use bootstrap::run;
+pub use bootstrap::AtriumApp;

@@ -422,6 +422,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "atrium"
+version = "0.1.0"
+dependencies = [
+ "atrium-gui",
+ "atrium-init",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "atrium-context"
 version = "0.1.0"
 dependencies = [
@@ -486,7 +496,6 @@ dependencies = [
  "atrium-error",
  "atrium-executor",
  "atrium-fs",
- "atrium-init",
  "atrium-io",
  "atrium-platform",
  "atrium-trace",
@@ -506,6 +515,7 @@ dependencies = [
  "atrium-fs",
  "atrium-io",
  "atrium-trace",
+ "gpui",
  "tokio",
  "tracing",
 ]
