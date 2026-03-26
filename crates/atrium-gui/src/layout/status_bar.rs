@@ -11,6 +11,9 @@ const STATUS_BAR_HEIGHT: f32 = 24.0;
 pub struct StatusBar;
 
 impl StatusBar {
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ Windows · 2 terminals                               v0.1.0 │
+    // └──────────────────────────────────────────────────────────────┘
     /// Render the status bar.
     pub fn render(palette: &ThemePalette, terminal_count: usize) -> Div {
         let platform = Platform::current();

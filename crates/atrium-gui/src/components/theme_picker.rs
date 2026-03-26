@@ -8,6 +8,16 @@ use atrium_core::theme::{ThemeKind, ThemePalette};
 pub struct ThemePicker;
 
 impl ThemePicker {
+    // ┌─── modal backdrop ────────────────────────────┐
+    // │  ┌──────────────────────────────┐             │
+    // │  │  Select Theme                │             │
+    // │  ├──────────────────────────────┤             │
+    // │  │  ● One Dark                  │  ← active  │
+    // │  │    Ayu Dark                  │             │
+    // │  │    Gruvbox Dark              │  ← themes   │
+    // │  │    Dracula                   │             │
+    // │  └──────────────────────────────┘             │
+    // └───────────────────────────────────────────────┘
     /// Render the theme picker as a modal.
     pub fn render(palette: &ThemePalette, current: ThemeKind) -> Div {
         let mut grid = div()

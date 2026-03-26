@@ -11,7 +11,9 @@
 mod os;
 mod paths;
 mod shell;
+mod keyboard;
 
 pub use os::{Arch, Os, Platform};
 pub use paths::PlatformPaths;
 pub use shell::Shell;
+pub use keyboard::{primary_modifier, primary_keystroke, primary_shift_keystroke};

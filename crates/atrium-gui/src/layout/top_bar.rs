@@ -10,6 +10,10 @@ const TITLEBAR_HEIGHT: f32 = 34.0;
 pub struct TopBar;
 
 impl TopBar {
+    // ┌──────────────────────────────────────────────────────────────┐
+    // │ ◀ ▶          Atrium                                    ⚙   │
+    // │ [nav]     [center title]                          [actions] │
+    // └──────────────────────────────────────────────────────────────┘
     /// Render the top bar.
     pub fn render(palette: &ThemePalette, _can_go_back: bool, _can_go_forward: bool) -> Div {
         div()

@@ -29,6 +29,23 @@ impl AtriumWindow {
     }
 }
 
+// ┌──────────────────────────────────────────────────────────────────┐
+// │ TopBar                                                          │
+// │  ◀ ▶   [back/fwd nav]          Atrium          [actions] ⚙     │
+// ├────────┬───────────────────────────────────┬───────────────────┤
+// │Sidebar │ CenterPanel                       │ RightPane         │
+// │        │ ┌─────────────────────────────┐   │ ┌───────────────┐ │
+// │REPOS   │ │ Tab bar: [Term 1] [Term 2] +│   │ │Changes│Files  │ │
+// │        │ ├─────────────────────────────┤   │ ├───────────────┤ │
+// │ repo-a │ │                             │   │ │               │ │
+// │ repo-b │ │  Terminal / Diff / Logs     │   │ │ changed files │ │
+// │        │ │  content area               │   │ │ or file tree  │ │
+// │        │ │                             │   │ │               │ │
+// │        │ └─────────────────────────────┘   │ └───────────────┘ │
+// ├────────┴───────────────────────────────────┴───────────────────┤
+// │ StatusBar                                                       │
+// │  Windows · 2 terminals                                  v0.1.0 │
+// └──────────────────────────────────────────────────────────────────┘
 impl Render for AtriumWindow {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let palette = self.theme.palette();

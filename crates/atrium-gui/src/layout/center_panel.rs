@@ -8,6 +8,14 @@ use atrium_core::theme::ThemePalette;
 pub struct CenterPanel;
 
 impl CenterPanel {
+    // ┌─────────────────────────────────────────┐
+    // │ [Term 1] [Term 2] [Logs]            [+] │  ← tab bar
+    // ├─────────────────────────────────────────┤
+    // │                                         │
+    // │   Terminal output / Diff / File view     │  ← content
+    // │   or empty state: "Press Cmd+T"          │
+    // │                                         │
+    // └─────────────────────────────────────────┘
     /// Render the center panel with a tab bar and content area.
     pub fn render(palette: &ThemePalette, terminal_count: usize) -> Div {
         div()

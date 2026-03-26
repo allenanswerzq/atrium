@@ -8,6 +8,14 @@ use atrium_core::theme::ThemePalette;
 pub struct Modal;
 
 impl Modal {
+    // ┌─── full screen backdrop (semi-transparent) ───┐
+    // │                                               │
+    // │   ┌─────────────────────────────┐             │
+    // │   │  modal content (rounded,    │             │
+    // │   │  bordered, chrome_bg)       │             │
+    // │   └─────────────────────────────┘             │
+    // │                                               │
+    // └───────────────────────────────────────────────┘
     /// Render a centered modal with a backdrop.
     pub fn render(palette: &ThemePalette, width: f32, content: Div) -> Div {
         div()

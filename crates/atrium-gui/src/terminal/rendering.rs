@@ -14,6 +14,14 @@ pub const FONT_SIZE: f32 = 15.0;
 pub struct TerminalRenderer;
 
 impl TerminalRenderer {
+    // ┌──────────────────────────────────────┐
+    // │ Session: zsh — running               │  ← header (if empty)
+    // │ $ ls -la                             │
+    // │ drwxr-xr-x  5 user ...              │  ← output lines
+    // │ -rw-r--r--  1 user ...              │
+    // │                                      │
+    // │                          cursor: 0:3 │  ← cursor indicator
+    // └──────────────────────────────────────┘
     /// Render a terminal session's output area.
     pub fn render(session: &TerminalSession, palette: &ThemePalette) -> Div {
         let mut container = div()

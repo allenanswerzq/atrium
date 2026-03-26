@@ -8,6 +8,12 @@ use atrium_core::theme::ThemePalette;
 pub struct TextInput;
 
 impl TextInput {
+    // ┌──────────────────────────────────┐
+    // │ placeholder or typed value...    │
+    // └──────────────────────────────────┘
+    //  border, rounded, muted placeholder
+    //  or primary text when has value
+
     /// Render a text input with placeholder.
     pub fn render(value: &str, placeholder: &str, palette: &ThemePalette) -> Div {
         let display = if value.is_empty() { placeholder } else { value };

@@ -8,6 +8,12 @@ use atrium_core::theme::ThemePalette;
 pub struct ActionButton;
 
 impl ActionButton {
+    // ┌──────────────┐      ┌──────────────┐
+    // │  Save  (pri) │      │  Cancel (gh) │
+    // └──────────────┘      └──────────────┘
+    //  accent bg, white      transparent bg,
+    //  text, rounded         muted text, hover
+
     /// Render a primary action button.
     pub fn primary(label: &str, palette: &ThemePalette) -> Div {
         div()

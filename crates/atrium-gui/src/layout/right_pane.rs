@@ -8,6 +8,14 @@ use atrium_core::theme::ThemePalette;
 pub struct RightPane;
 
 impl RightPane {
+    // ┌───────────────┐
+    // │Changes │ Files │  ← tab bar
+    // ├───────────────┤
+    // │               │
+    // │ changed files │  ← content
+    // │ or file tree  │
+    // │               │
+    // └───────────────┘
     /// Render the right pane.
     pub fn render(palette: &ThemePalette, width: f32) -> Div {
         div()

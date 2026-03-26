@@ -8,6 +8,16 @@ use atrium_core::theme::ThemePalette;
 pub struct Sidebar;
 
 impl Sidebar {
+    // ┌────────────┐
+    // │REPOSITORIES│
+    // │            │
+    // │ ▸ repo-a   │
+    // │ ▸ repo-b   │
+    // │ ▸ repo-c   │
+    // │            │
+    // │ (or empty  │
+    // │  message)  │
+    // └────────────┘
     /// Render the sidebar.
     pub fn render(palette: &ThemePalette, width: f32, repos: &[std::path::PathBuf]) -> Div {
         let mut sidebar = div()

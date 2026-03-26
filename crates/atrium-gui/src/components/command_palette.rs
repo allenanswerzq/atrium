@@ -8,6 +8,15 @@ use atrium_core::theme::ThemePalette;
 pub struct CommandPalette;
 
 impl CommandPalette {
+    // ┌─── modal backdrop ────────────────────────────┐
+    // │  ┌──────────────────────────────┐             │
+    // │  │ [Type a command...        ]  │  ← input   │
+    // │  ├──────────────────────────────┤             │
+    // │  │  New Terminal                │             │
+    // │  │  Open Settings               │  ← items   │
+    // │  │  Toggle Sidebar              │  (filtered) │
+    // │  └──────────────────────────────┘             │
+    // └───────────────────────────────────────────────┘
     /// Render the command palette overlay.
     pub fn render(palette: &ThemePalette, query: &str, items: &[&str]) -> Div {
         let mut list = div()
