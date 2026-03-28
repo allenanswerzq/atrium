@@ -10,10 +10,9 @@ name = "atrium"
 path = "main.rs"
 
 [dependencies]
-atrium-init = { workspace = true }
-atrium-gui  = { workspace = true }
-tokio       = { workspace = true, features = ["macros", "rt-multi-thread"] }
-tracing     = { workspace = true }
+atrium-gui   = { workspace = true }
+atrium-trace = { workspace = true }
+tracing      = { workspace = true }
 
 [lints]
 workspace = true

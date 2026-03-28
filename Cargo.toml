@@ -10,6 +10,7 @@ members = [
     "crates/atrium-init",
     "crates/atrium-core",
     "crates/atrium-platform",
+    "crates/atrium-terminal",
     "crates/atrium-watcher",
     "crates/atrium-gui",
     "bin/atrium",
@@ -40,6 +41,7 @@ atrium-io       = { path = "crates/atrium-io", version = "0.1.0" }
 atrium-init     = { path = "crates/atrium-init", version = "0.1.0" }
 atrium-core     = { path = "crates/atrium-core", version = "0.1.0" }
 atrium-platform = { path = "crates/atrium-platform", version = "0.1.0" }
+atrium-terminal = { path = "crates/atrium-terminal", version = "0.1.0" }
 atrium-gui      = { path = "crates/atrium-gui", version = "0.1.0" }
 atrium-watcher  = { path = "crates/atrium-watcher", version = "0.1.0" }
 
@@ -76,6 +78,9 @@ tempfile = "3"
 
 # UI
 gpui = "0.2.2"
+
+# Terminal
+portable-pty = "0.8"
 
 # Architecture graphs (llmcc)
 # llmcc-core     = { git = "https://github.com/allenanswerzq/llmcc", version = "0.2" }

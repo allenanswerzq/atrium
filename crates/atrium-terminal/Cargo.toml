@@ -1,0 +1,24 @@
+[package]
+name = "atrium-terminal"
+description = "Terminal emulation, PTY management, and session lifecycle for Atrium"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atrium-core     = { workspace = true }
+atrium-error    = { workspace = true }
+atrium-fs       = { workspace = true }
+atrium-platform = { workspace = true }
+
+portable-pty = { workspace = true }
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+strum        = { workspace = true }
+tracing      = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

@@ -14,6 +14,7 @@ atrium-executor = { workspace = true }
 atrium-fs       = { workspace = true }
 atrium-io       = { workspace = true }
 atrium-platform = { workspace = true }
+atrium-terminal = { workspace = true }
 atrium-trace    = { workspace = true }
 
 # UI

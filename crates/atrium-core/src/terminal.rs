@@ -104,25 +104,23 @@ pub struct TerminalSnapshot {
 ///
 /// Implemented by `LocalTerminalDaemon` in the httpd crate.
 pub trait TerminalDaemon {
-    type Error;
-
     fn create_or_attach(
         &mut self,
         request: CreateOrAttachRequest,
-    ) -> Result<DaemonSessionRecord, Self::Error>;
+    ) -> atrium_error::Result<DaemonSessionRecord>;
 
-    fn write(&mut self, request: WriteRequest) -> Result<(), Self::Error>;
-    fn resize(&mut self, request: ResizeRequest) -> Result<(), Self::Error>;
-    fn detach(&mut self, request: DetachRequest) -> Result<(), Self::Error>;
-    fn kill(&mut self, request: KillRequest) -> Result<(), Self::Error>;
-    fn snapshot(&self, session_id: &SessionId, max_lines: usize) -> Result<TerminalSnapshot, Self::Error>;
+    fn write(&mut self, request: WriteRequest) -> atrium_error::Result<()>;
+    fn resize(&mut self, request: ResizeRequest) -> atrium_error::Result<()>;
+    fn detach(&mut self, request: DetachRequest) -> atrium_error::Result<()>;
+    fn kill(&mut self, request: KillRequest) -> atrium_error::Result<()>;
+    fn snapshot(&self, session_id: &SessionId, max_lines: usize) -> atrium_error::Result<TerminalSnapshot>;
     fn list_sessions(&self) -> Vec<DaemonSessionRecord>;
 }
 
 /// Persistent storage for session records.
 pub trait DaemonSessionStore: Send + Sync {
-    fn load(&self) -> Result<Vec<DaemonSessionRecord>, String>;
-    fn save(&self, records: &[DaemonSessionRecord]) -> Result<(), String>;
+    fn load(&self) -> atrium_error::Result<Vec<DaemonSessionRecord>>;
+    fn save(&self, records: &[DaemonSessionRecord]) -> atrium_error::Result<()>;
 }
 
 // ── Utilities ───────────────────────────────────────────────────────

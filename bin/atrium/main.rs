@@ -1,14 +1,14 @@
 //! Atrium desktop application entry point.
+//!
+//! GPUI requires Application::new() to be called from the main thread
+//! without an async runtime. So we init synchronously, then run the GUI.
 
-#[tokio::main]
-async fn main() {
-    let mut early = atrium_init::early_init()
-        .await
-        .expect("early initialization failed");
-
+fn main() {
+    // Phase 1: synchronous early init (tracing, context)
+    atrium_trace::init();
     tracing::info!("Atrium starting");
 
-    let application = early.take_application().expect("Application not available");
-    let app = atrium_gui::app::AtriumApp::new(application);
+    // Phase 2: create GPUI Application and run event loop
+    let app = atrium_gui::app::AtriumApp::create();
     app.run();
 }

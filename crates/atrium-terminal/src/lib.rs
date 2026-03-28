@@ -1,0 +1,45 @@
+//! # atrium-terminal
+//!
+//! Terminal emulation, PTY management, and session lifecycle.
+//!
+//! This crate is **GUI-agnostic** — it provides the terminal backend
+//! that any UI (GPUI, web, TUI) can consume.
+//!
+//! ## Architecture
+//!
+//! ```text
+//!  types.rs    — Protocol types: requests, signals, states, snapshots
+//!  styled.rs   — Output styling: StyledLine, StyledCell, Cursor, Modes
+//!  pty.rs      — PTY handle: spawn shell, read/write (portable-pty)
+//!  session.rs  — LiveSession: PTY + output buffer + reader thread
+//!  daemon.rs   — TerminalDaemon trait + LocalDaemon (manages sessions)
+//!  store.rs    — SessionStore trait + JSON file impl
+//!  keys.rs     — Keystroke → terminal escape sequence mapping
+//! ```
+//!
+//! ## Dependency chain
+//!
+//! ```text
+//!  types ← styled ← pty ← session ← daemon
+//!                                  ← store
+//! ```
+
+pub mod daemon;
+pub mod keys;
+pub mod pty;
+pub mod session;
+pub mod store;
+pub mod styled;
+pub mod types;
+
+// Re-export the most commonly used types at crate root.
+pub use daemon::{LocalDaemon, TerminalDaemon};
+pub use keys::terminal_escape_bytes;
+pub use pty::PtyHandle;
+pub use session::LiveSession;
+pub use store::{JsonSessionStore, SessionStore};
+pub use styled::{Cursor, Modes, StyledCell, StyledLine, StyledRun};
+pub use types::{
+    CreateRequest, KillRequest, ResizeRequest, SessionRecord, Signal, Snapshot, State,
+    WriteRequest,
+};
