@@ -3,7 +3,7 @@
 root := justfile_directory()
 
 # Format all code
-format:
+fmt:
     cargo fmt
 
 # Check formatting without modifying

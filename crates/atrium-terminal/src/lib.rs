@@ -9,11 +9,11 @@
 //!
 //! ```text
 //!  types.rs    — Protocol types: requests, signals, states, snapshots
-//!  styled.rs   — Output styling: StyledLine, StyledCell, Cursor, Modes
+//!  styled.rs   — Output styling: TerminalStyledLine, TerminalStyledCell, TerminalCursor, TerminalModes
 //!  pty.rs      — PTY handle: spawn shell, read/write (portable-pty)
-//!  session.rs  — LiveSession: PTY + output buffer + reader thread
-//!  daemon.rs   — TerminalDaemon trait + LocalDaemon (manages sessions)
-//!  store.rs    — SessionStore trait + JSON file impl
+//!  session.rs  — TerminalSession: PTY + output buffer + reader thread
+//!  daemon.rs   — TerminalService trait + LocalTerminalService (manages sessions)
+//!  store.rs    — TerminalSessionStore trait + JSON file impl
 //!  keys.rs     — Keystroke → terminal escape sequence mapping
 //! ```
 //!

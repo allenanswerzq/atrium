@@ -101,19 +101,3 @@ pub struct TerminalSessionRecord {
     pub state: Option<TerminalState>,
     pub updated_at_unix_ms: Option<u64>,
 }
-
-// ── Utilities ───────────────────────────────────────────────────────
-
-/// Returns the default shell for the current platform.
-pub fn default_shell() -> String {
-    if let Ok(shell) = std::env::var("SHELL") {
-        if !shell.trim().is_empty() {
-            return shell;
-        }
-    }
-    if cfg!(windows) {
-        std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_owned())
-    } else {
-        "/bin/zsh".to_owned()
-    }
-}

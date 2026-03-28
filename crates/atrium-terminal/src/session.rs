@@ -1,15 +1,16 @@
-//! Live terminal session — PTY + output buffer + reader thread.
+//! Terminal session — PTY + output buffer + reader thread.
 //!
-//! A `LiveSession` owns the PTY process and accumulates its output.
+//! A `TerminalSession` owns the PTY process and accumulates its output.
 //! The reader thread runs in the background, appending raw bytes to
 //! a shared buffer. Callers use `snapshot()` to read the current state
 //! and `write()` to send keystrokes.
 
 use std::io::Read;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use atrium_core::id::{SessionId, WorkspaceId};
 use atrium_error::Result;
+use parking_lot::Mutex;
 
 use crate::pty::TerminalPty;
 use crate::types::{TerminalSessionRecord, TerminalSnapshot, TerminalState};
@@ -81,19 +82,16 @@ impl TerminalSession {
     pub fn rows(&self) -> u16 { self.rows }
 
     pub fn state(&self) -> TerminalState {
-        self.state.lock().map(|s| *s).unwrap_or(TerminalState::Failed)
+        *self.state.lock()
     }
 
     pub fn exit_code(&self) -> Option<i32> {
-        self.exit_code.lock().ok().and_then(|c| *c)
+        *self.exit_code.lock()
     }
 
     /// Whether the PTY has produced any output yet.
     pub fn has_output(&self) -> bool {
-        self.raw_output
-            .lock()
-            .ok()
-            .is_some_and(|s| !s.is_empty())
+        !self.raw_output.lock().is_empty()
     }
 
     // ── I/O ─────────────────────────────────────────────────────────
@@ -110,8 +108,7 @@ impl TerminalSession {
     /// Splits on newlines, strips ANSI escape codes and carriage returns.
     /// Includes partial lines (e.g. the shell prompt).
     pub fn output_lines(&self) -> Vec<String> {
-        let raw = self.raw_output.lock().ok();
-        let Some(raw) = raw else { return Vec::new() };
+        let raw = self.raw_output.lock();
         if raw.is_empty() {
             return Vec::new();
         }
@@ -137,10 +134,17 @@ impl TerminalSession {
 
     /// Build a persistence record.
     pub fn record(&self) -> TerminalSessionRecord {
-        let output_tail = self.raw_output.lock().ok().map(|s| {
+        let output_tail = {
+            let raw = self.raw_output.lock();
             let max = 8192;
-            if s.len() > max { s[s.len() - max..].to_owned() } else { s.clone() }
-        });
+            if raw.len() > max {
+                Some(raw[raw.len() - max..].to_owned())
+            } else if raw.is_empty() {
+                None
+            } else {
+                Some(raw.clone())
+            }
+        };
 
         TerminalSessionRecord {
             session_id: self.session_id.clone(),
@@ -173,17 +177,13 @@ fn reader_loop(
             Ok(0) => break,
             Ok(n) => {
                 let text = String::from_utf8_lossy(&buf[..n]);
-                if let Ok(mut out) = output.lock() {
-                    out.push_str(&text);
-                }
+                output.lock().push_str(&text);
             }
             Err(_) => break,
         }
     }
     // Process exited
-    if let Ok(mut s) = state.lock() {
-        *s = TerminalState::Completed;
-    }
+    *state.lock() = TerminalState::Completed;
 }
 
 // ── ANSI stripping ──────────────────────────────────────────────────

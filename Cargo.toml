@@ -81,6 +81,7 @@ gpui = "0.2.2"
 
 # Terminal
 portable-pty = "0.8"
+parking_lot  = "0.12"
 
 # Architecture graphs (llmcc)
 # llmcc-core     = { git = "https://github.com/allenanswerzq/llmcc", version = "0.2" }
