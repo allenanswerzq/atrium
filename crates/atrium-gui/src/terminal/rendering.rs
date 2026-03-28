@@ -7,7 +7,7 @@ use gpui::{div, prelude::*, px, rgb, Div};
 
 use atrium_core::theme::ThemePalette;
 use atrium_terminal::{TerminalSession, TerminalStyledLine};
-use atrium_terminal::styled::DEFAULT_BG;
+use atrium_terminal::styled::DEFAULT_FG;
 
 pub const CELL_WIDTH: f32 = 9.0;
 pub const LINE_HEIGHT: f32 = 19.0;
@@ -40,22 +40,26 @@ pub fn render_terminal(session: &TerminalSession, palette: &ThemePalette) -> Div
     let mut container = div()
         .size_full()
         .bg(rgb(palette.terminal_bg))
+        .p(px(4.0))
         .flex()
         .flex_col();
 
     for (row_idx, line) in styled_lines.iter().enumerate() {
-        let line_div = render_styled_line(line, row_idx, &cursor, palette);
+        let is_cursor_row = row_idx == cursor.line;
+        let line_div = render_styled_line(line, is_cursor_row, palette);
         container = container.child(line_div);
     }
 
     container
 }
 
-/// Render a single styled line as a row of colored text runs.
+/// Render a single styled line.
+///
+/// Each line is a flex-row with colored text spans.
+/// Backgrounds are ignored — text renders on the terminal background.
 fn render_styled_line(
     line: &TerminalStyledLine,
-    row_idx: usize,
-    cursor: &atrium_terminal::TerminalCursor,
+    is_cursor_row: bool,
     palette: &ThemePalette,
 ) -> Div {
     let mut row = div()
@@ -64,27 +68,18 @@ fn render_styled_line(
         .flex()
         .flex_row();
 
-    for run in &line.runs {
-        let _is_cursor_in_run = row_idx == cursor.line;
-        let fg = if run.fg == DEFAULT_BG { palette.text_primary } else { run.fg };
-        let bg = run.bg;
-
-        let mut run_div = div()
-            .text_size(px(FONT_SIZE))
-            .text_color(rgb(fg));
-
-        // Only paint background if it differs from terminal background
-        if bg != palette.terminal_bg && bg != DEFAULT_BG {
-            run_div = run_div.bg(rgb(bg));
-        }
-
-        run_div = run_div.child(run.text.clone());
-        row = row.child(run_div);
+    if is_cursor_row {
+        row = row.bg(rgb(palette.border));
     }
 
-    // Highlight the cursor row subtly
-    if row_idx == cursor.line {
-        row = row.bg(rgb(palette.border));
+    for run in &line.runs {
+        let fg = remap_fg(run.fg, palette);
+        row = row.child(
+            div()
+                .text_size(px(FONT_SIZE))
+                .text_color(rgb(fg))
+                .child(run.text.clone()),
+        );
     }
 
     row
@@ -120,4 +115,21 @@ fn render_detached(palette: &ThemePalette) -> Div {
                 .text_color(rgb(palette.text_muted))
                 .child("Session detached"),
         )
+}
+
+// ── Color remapping ─────────────────────────────────────────────────
+
+/// Map terminal foreground color to theme-appropriate color.
+///
+/// The emulator outputs raw ANSI colors (0xRRGGBB). We remap the
+/// "default" terminal colors to the theme palette so text is readable.
+fn remap_fg(color: u32, palette: &ThemePalette) -> u32 {
+    match color {
+        // Default fg → use theme terminal fg
+        c if c == DEFAULT_FG => palette.terminal_fg,
+        // Black text on dark theme is invisible → use muted text
+        0x000000 => palette.text_muted,
+        // Everything else: keep the terminal's color
+        c => c,
+    }
 }

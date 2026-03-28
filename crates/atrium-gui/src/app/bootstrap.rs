@@ -19,6 +19,13 @@ pub struct AtriumApp {
 }
 
 impl AtriumApp {
+    /// Create a new AtriumApp directly.
+    pub fn create() -> Self {
+        Self {
+            inner: gpui::Application::new(),
+        }
+    }
+
     /// Create an AtriumApp from a GPUI Application.
     pub fn new(application: gpui::Application) -> Self {
         Self {

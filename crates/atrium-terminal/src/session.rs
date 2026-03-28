@@ -72,6 +72,35 @@ impl TerminalRuntime {
         })
     }
 
+    /// Spawn without an executor — uses a plain OS thread for the reader.
+    /// Useful when no tokio runtime is available (e.g. GUI-only mode).
+    pub fn spawn_standalone(
+        shell: &str,
+        cwd: &std::path::Path,
+        cols: u16,
+        rows: u16,
+    ) -> Result<Self> {
+        let (pty, reader) = TerminalPty::spawn(shell, cwd, cols, rows)?;
+        let emulator = Arc::new(Mutex::new(TerminalEmulator::new(rows, cols)));
+        let state: Arc<Mutex<TerminalState>> = Arc::new(Mutex::new(TerminalState::Running));
+
+        let emu_ref = Arc::clone(&emulator);
+        let state_ref = Arc::clone(&state);
+
+        std::thread::Builder::new()
+            .name("terminal-reader".to_owned())
+            .spawn(move || {
+                reader_loop(reader, emu_ref, state_ref);
+            })
+            .map_err(|e| atrium_error::Error::from(e))?;
+
+        Ok(Self {
+            pty,
+            emulator,
+            state,
+        })
+    }
+
     /// Send bytes to the PTY's stdin.
     pub fn write(&self, data: &[u8]) -> Result<()> {
         self.pty.write(data)
@@ -134,7 +163,7 @@ pub struct TerminalSession {
 }
 
 impl TerminalSession {
-    /// Spawn a new session with a live PTY.
+    /// Spawn a new session with a live PTY (managed by executor).
     pub fn spawn(
         executor: &TaskExecutor,
         session_id: SessionId,
@@ -146,6 +175,29 @@ impl TerminalSession {
         rows: u16,
     ) -> Result<Self> {
         let runtime = TerminalRuntime::spawn(executor, shell, &cwd, cols, rows)?;
+        Ok(Self {
+            session_id,
+            workspace_id,
+            cwd,
+            shell: shell.to_owned(),
+            title: title.into(),
+            cols,
+            rows,
+            runtime: Some(runtime),
+        })
+    }
+
+    /// Spawn a new session with a standalone reader thread (no executor needed).
+    pub fn spawn_standalone(
+        session_id: SessionId,
+        workspace_id: WorkspaceId,
+        cwd: std::path::PathBuf,
+        shell: &str,
+        title: impl Into<String>,
+        cols: u16,
+        rows: u16,
+    ) -> Result<Self> {
+        let runtime = TerminalRuntime::spawn_standalone(shell, &cwd, cols, rows)?;
         Ok(Self {
             session_id,
             workspace_id,

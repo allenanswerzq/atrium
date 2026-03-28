@@ -32,6 +32,7 @@ pub struct ThemePalette {
     pub accent: u32,
     pub border: u32,
     pub terminal_bg: u32,
+    pub terminal_fg: u32,
     pub terminal_cursor: u32,
 }
 
@@ -85,6 +86,7 @@ impl ThemeKind {
                 accent: 0x74ade8,
                 border: 0x363c46,
                 terminal_bg: 0x282c34,
+                terminal_fg: 0xc8ccd4,
                 terminal_cursor: 0xebdbb2,
             },
             Self::Ayu => ThemePalette {
@@ -95,6 +97,7 @@ impl ThemeKind {
                 accent: 0x5ac1fe,
                 border: 0x3f4043,
                 terminal_bg: 0x0d1016,
+                terminal_fg: 0xbfbdb6,
                 terminal_cursor: 0xbfbdb6,
             },
             Self::Gruvbox => ThemePalette {
@@ -105,6 +108,7 @@ impl ThemeKind {
                 accent: 0x83a598,
                 border: 0x504945,
                 terminal_bg: 0x282828,
+                terminal_fg: 0xebdbb2,
                 terminal_cursor: 0xebdbb2,
             },
             Self::Dracula => ThemePalette {
@@ -115,6 +119,7 @@ impl ThemeKind {
                 accent: 0xbd93f9,
                 border: 0x44475a,
                 terminal_bg: 0x282a36,
+                terminal_fg: 0xf8f8f2,
                 terminal_cursor: 0xf8f8f2,
             },
             Self::SolarizedLight => ThemePalette {
@@ -125,6 +130,7 @@ impl ThemeKind {
                 accent: 0x268bd2,
                 border: 0xd8cfba,
                 terminal_bg: 0xfdf6e3,
+                terminal_fg: 0x586e75,
                 terminal_cursor: 0x586e75,
             },
             Self::SolarizedDark => ThemePalette {
@@ -135,6 +141,7 @@ impl ThemeKind {
                 accent: 0x268bd2,
                 border: 0x0a4353,
                 terminal_bg: 0x002b36,
+                terminal_fg: 0x839496,
                 terminal_cursor: 0x839496,
             },
             Self::Nord => ThemePalette {
@@ -145,6 +152,7 @@ impl ThemeKind {
                 accent: 0x88c0d0,
                 border: 0x434c5e,
                 terminal_bg: 0x2e3440,
+                terminal_fg: 0xd8dee9,
                 terminal_cursor: 0xd8dee9,
             },
             Self::Catppuccin => ThemePalette {
@@ -155,6 +163,7 @@ impl ThemeKind {
                 accent: 0x89b4fa,
                 border: 0x45475a,
                 terminal_bg: 0x1e1e2e,
+                terminal_fg: 0xcdd6f4,
                 terminal_cursor: 0xcdd6f4,
             },
             Self::TokyoNight => ThemePalette {
@@ -165,6 +174,7 @@ impl ThemeKind {
                 accent: 0x7aa2f7,
                 border: 0x292e42,
                 terminal_bg: 0x1a1b26,
+                terminal_fg: 0xc0caf5,
                 terminal_cursor: 0xc0caf5,
             },
             Self::Rosepine => ThemePalette {
@@ -175,6 +185,7 @@ impl ThemeKind {
                 accent: 0xc4a7e7,
                 border: 0x2a273f,
                 terminal_bg: 0x191724,
+                terminal_fg: 0xe0def4,
                 terminal_cursor: 0xe0def4,
             },
         }

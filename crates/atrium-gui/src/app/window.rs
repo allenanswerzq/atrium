@@ -26,9 +26,19 @@ pub struct AtriumWindow {
 
 impl AtriumWindow {
     pub fn new(cx: &mut Context<Self>) -> Self {
+        // Spawn a default terminal session
+        let shell = atrium_core::terminal::default_shell();
+        let cwd = std::env::current_dir().unwrap_or_else(|_| {
+            std::path::PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" })
+        });
+        let id = atrium_core::id::SessionId::new("term-1".to_owned());
+        let wid = atrium_core::id::WorkspaceId::new("default".to_owned());
+
+        let session = TerminalSession::spawn_standalone(id, wid, cwd, &shell, "Terminal 1", 120, 40).ok();
+
         Self {
             theme: ThemeState::default(),
-            session: None,
+            session,
             focus: cx.focus_handle(),
             poller_started: false,
         }
