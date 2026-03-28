@@ -431,6 +431,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "atrium-agent"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "atrium-error",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "atrium-context"
 version = "0.1.0"
 dependencies = [

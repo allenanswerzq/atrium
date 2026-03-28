@@ -9,9 +9,9 @@ use std::fmt;
 /// Identifies a terminal daemon session.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct SessionId(String);
+pub struct TerminalSessionId(String);
 
-impl SessionId {
+impl TerminalSessionId {
     #[must_use]
     pub fn new(id: impl Into<String>) -> Self {
         Self(id.into())
@@ -23,19 +23,19 @@ impl SessionId {
     }
 }
 
-impl fmt::Display for SessionId {
+impl fmt::Display for TerminalSessionId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
 }
 
-impl From<String> for SessionId {
+impl From<String> for TerminalSessionId {
     fn from(s: String) -> Self {
         Self(s)
     }
 }
 
-impl From<&str> for SessionId {
+impl From<&str> for TerminalSessionId {
     fn from(s: &str) -> Self {
         Self(s.to_owned())
     }

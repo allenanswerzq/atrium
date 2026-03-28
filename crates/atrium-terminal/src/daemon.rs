@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use atrium_core::id::SessionId;
+use atrium_core::id::TerminalSessionId;
 use atrium_error::{Error, ErrorKind, Result};
 use atrium_executor::TaskExecutor;
 
@@ -23,7 +23,7 @@ pub trait TerminalService {
     fn create(&mut self, request: TerminalCreateRequest) -> Result<TerminalSessionRecord>;
     fn write(&self, request: TerminalWriteRequest) -> Result<()>;
     fn kill(&mut self, request: TerminalKillRequest) -> Result<()>;
-    fn snapshot(&self, session_id: &SessionId) -> Result<TerminalSnapshot>;
+    fn snapshot(&self, session_id: &TerminalSessionId) -> Result<TerminalSnapshot>;
     fn list_sessions(&self) -> Vec<TerminalSessionRecord>;
 }
 
@@ -32,7 +32,7 @@ pub trait TerminalService {
 /// Holds a `TaskExecutor` so new terminal reader tasks are managed centrally.
 pub struct LocalTerminalService {
     executor: TaskExecutor,
-    sessions: HashMap<SessionId, TerminalSession>,
+    sessions: HashMap<TerminalSessionId, TerminalSession>,
 }
 
 impl LocalTerminalService {
@@ -44,7 +44,7 @@ impl LocalTerminalService {
     }
 
     /// Get a reference to a live session.
-    pub fn session(&self, id: &SessionId) -> Option<&TerminalSession> {
+    pub fn session(&self, id: &TerminalSessionId) -> Option<&TerminalSession> {
         self.sessions.get(id)
     }
 
@@ -89,7 +89,7 @@ impl TerminalService for LocalTerminalService {
         }
     }
 
-    fn snapshot(&self, session_id: &SessionId) -> Result<TerminalSnapshot> {
+    fn snapshot(&self, session_id: &TerminalSessionId) -> Result<TerminalSnapshot> {
         let session = self.sessions.get(session_id).ok_or_else(|| {
             Error::new(ErrorKind::NotFound, "session not found")
                 .with_context("session_id", session_id.to_string())

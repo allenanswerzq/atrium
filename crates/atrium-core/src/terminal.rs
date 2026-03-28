@@ -3,7 +3,7 @@
 //! Defines the request/response types for terminal session management
 //! and the `TerminalDaemon` trait that backends implement.
 
-use crate::id::{SessionId, WorkspaceId};
+use crate::id::{TerminalSessionId, WorkspaceId};
 use serde::{Deserialize, Serialize};
 use strum::{Display, IntoStaticStr};
 use std::path::PathBuf;
@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateOrAttachRequest {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
     pub workspace_id: WorkspaceId,
     pub cwd: PathBuf,
     pub shell: String,
@@ -24,25 +24,25 @@ pub struct CreateOrAttachRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WriteRequest {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
     pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResizeRequest {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
     pub cols: u16,
     pub rows: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DetachRequest {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KillRequest {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
 }
 
 // ── Signals ─────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ pub enum TerminalSessionState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DaemonSessionRecord {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
     pub workspace_id: WorkspaceId,
     pub cwd: PathBuf,
     pub shell: String,
@@ -91,7 +91,7 @@ pub struct DaemonSessionRecord {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalSnapshot {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
     pub output_tail: String,
     pub exit_code: Option<i32>,
     pub state: TerminalSessionState,
@@ -113,7 +113,7 @@ pub trait TerminalDaemon {
     fn resize(&mut self, request: ResizeRequest) -> atrium_error::Result<()>;
     fn detach(&mut self, request: DetachRequest) -> atrium_error::Result<()>;
     fn kill(&mut self, request: KillRequest) -> atrium_error::Result<()>;
-    fn snapshot(&self, session_id: &SessionId, max_lines: usize) -> atrium_error::Result<TerminalSnapshot>;
+    fn snapshot(&self, session_id: &TerminalSessionId, max_lines: usize) -> atrium_error::Result<TerminalSnapshot>;
     fn list_sessions(&self) -> Vec<DaemonSessionRecord>;
 }
 

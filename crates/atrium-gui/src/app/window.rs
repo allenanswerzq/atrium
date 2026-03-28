@@ -31,7 +31,7 @@ impl AtriumWindow {
         let cwd = std::env::current_dir().unwrap_or_else(|_| {
             std::path::PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" })
         });
-        let id = atrium_core::id::SessionId::new("term-1".to_owned());
+        let id = atrium_core::id::TerminalSessionId::new("term-1".to_owned());
         let wid = atrium_core::id::WorkspaceId::new("default".to_owned());
 
         let session = TerminalSession::spawn_standalone(id, wid, cwd, &shell, "Terminal 1", 120, 40).ok();

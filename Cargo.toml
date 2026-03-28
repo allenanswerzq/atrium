@@ -11,6 +11,7 @@ members = [
     "crates/atrium-core",
     "crates/atrium-platform",
     "crates/atrium-terminal",
+    "crates/atrium-agent",
     "crates/atrium-watcher",
     "crates/atrium-gui",
     "bin/atrium",
@@ -42,6 +43,7 @@ atrium-init     = { path = "crates/atrium-init", version = "0.1.0" }
 atrium-core     = { path = "crates/atrium-core", version = "0.1.0" }
 atrium-platform = { path = "crates/atrium-platform", version = "0.1.0" }
 atrium-terminal = { path = "crates/atrium-terminal", version = "0.1.0" }
+atrium-agent    = { path = "crates/atrium-agent", version = "0.1.0" }
 atrium-gui      = { path = "crates/atrium-gui", version = "0.1.0" }
 atrium-watcher  = { path = "crates/atrium-watcher", version = "0.1.0" }
 

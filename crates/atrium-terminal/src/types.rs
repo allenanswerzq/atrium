@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use strum::{Display, IntoStaticStr};
 
-use atrium_core::id::{SessionId, WorkspaceId};
+use atrium_core::id::{TerminalSessionId, WorkspaceId};
 
 use crate::styled::{TerminalCursor, TerminalModes, TerminalStyledLine};
 
@@ -16,7 +16,7 @@ use crate::styled::{TerminalCursor, TerminalModes, TerminalStyledLine};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalCreateRequest {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
     pub workspace_id: WorkspaceId,
     pub cwd: PathBuf,
     pub shell: String,
@@ -28,20 +28,20 @@ pub struct TerminalCreateRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalWriteRequest {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
     pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalResizeRequest {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
     pub cols: u16,
     pub rows: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalKillRequest {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
 }
 
 // ── Signal ──────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ pub enum TerminalState {
 /// A point-in-time snapshot of terminal state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalSnapshot {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
     pub output: String,
     pub styled_lines: Vec<TerminalStyledLine>,
     pub cursor: Option<TerminalCursor>,
@@ -87,7 +87,7 @@ pub struct TerminalSnapshot {
 /// Persisted session metadata (survives restarts).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TerminalSessionRecord {
-    pub session_id: SessionId,
+    pub session_id: TerminalSessionId,
     pub workspace_id: WorkspaceId,
     pub cwd: PathBuf,
     pub shell: String,

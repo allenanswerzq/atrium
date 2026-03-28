@@ -11,7 +11,7 @@
 use std::io::Read;
 use std::sync::Arc;
 
-use atrium_core::id::{SessionId, WorkspaceId};
+use atrium_core::id::{TerminalSessionId, WorkspaceId};
 use atrium_error::Result;
 use atrium_executor::TaskExecutor;
 use parking_lot::Mutex;
@@ -151,7 +151,7 @@ impl TerminalRuntime {
 
 /// A terminal session — identity metadata + optional live runtime.
 pub struct TerminalSession {
-    session_id: SessionId,
+    session_id: TerminalSessionId,
     workspace_id: WorkspaceId,
     cwd: std::path::PathBuf,
     shell: String,
@@ -166,7 +166,7 @@ impl TerminalSession {
     /// Spawn a new session with a live PTY (managed by executor).
     pub fn spawn(
         executor: &TaskExecutor,
-        session_id: SessionId,
+        session_id: TerminalSessionId,
         workspace_id: WorkspaceId,
         cwd: std::path::PathBuf,
         shell: &str,
@@ -189,7 +189,7 @@ impl TerminalSession {
 
     /// Spawn a new session with a standalone reader thread (no executor needed).
     pub fn spawn_standalone(
-        session_id: SessionId,
+        session_id: TerminalSessionId,
         workspace_id: WorkspaceId,
         cwd: std::path::PathBuf,
         shell: &str,
@@ -212,7 +212,7 @@ impl TerminalSession {
 
     // ── Accessors ───────────────────────────────────────────────────
 
-    pub fn session_id(&self) -> &SessionId { &self.session_id }
+    pub fn session_id(&self) -> &TerminalSessionId { &self.session_id }
     pub fn title(&self) -> &str { &self.title }
     pub fn shell(&self) -> &str { &self.shell }
     pub fn cols(&self) -> u16 { self.cols }

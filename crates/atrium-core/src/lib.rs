@@ -24,4 +24,4 @@ pub mod terminal;
 pub mod theme;
 pub mod worktree;
 
-pub use id::{SessionId, WorkspaceId};
+pub use id::{TerminalSessionId, WorkspaceId};
