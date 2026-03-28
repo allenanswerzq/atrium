@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 atrium-core     = { workspace = true }
 atrium-error    = { workspace = true }
+atrium-executor = { workspace = true }
 atrium-fs       = { workspace = true }
 atrium-platform = { workspace = true }
 

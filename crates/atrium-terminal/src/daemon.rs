@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use atrium_core::id::SessionId;
 use atrium_error::{Error, ErrorKind, Result};
+use atrium_executor::TaskExecutor;
 
 use crate::session::TerminalSession;
 use crate::types::{
@@ -27,13 +28,17 @@ pub trait TerminalService {
 }
 
 /// Local terminal service that manages PTY sessions in-process.
+///
+/// Holds a `TaskExecutor` so new terminal reader tasks are managed centrally.
 pub struct LocalTerminalService {
+    executor: TaskExecutor,
     sessions: HashMap<SessionId, TerminalSession>,
 }
 
 impl LocalTerminalService {
-    pub fn new() -> Self {
+    pub fn new(executor: TaskExecutor) -> Self {
         Self {
+            executor,
             sessions: HashMap::new(),
         }
     }
@@ -49,15 +54,10 @@ impl LocalTerminalService {
     }
 }
 
-impl Default for LocalTerminalService {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl TerminalService for LocalTerminalService {
     fn create(&mut self, req: TerminalCreateRequest) -> Result<TerminalSessionRecord> {
         let session = TerminalSession::spawn(
+            &self.executor,
             req.session_id.clone(),
             req.workspace_id,
             req.cwd,

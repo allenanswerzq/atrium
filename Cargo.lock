@@ -548,6 +548,7 @@ version = "0.1.0"
 dependencies = [
  "atrium-core",
  "atrium-error",
+ "atrium-executor",
  "atrium-fs",
  "atrium-platform",
  "parking_lot",
