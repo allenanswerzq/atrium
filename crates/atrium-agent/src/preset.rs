@@ -4,9 +4,6 @@ use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, EnumString, IntoStaticStr};
 
 /// Supported agent types.
-///
-/// `Display` / `IntoStaticStr` give the snake_case key (e.g. `"claude"`).
-/// Use `label()` for the human-readable name (e.g. `"Claude"`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Display, EnumString, EnumIter, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
