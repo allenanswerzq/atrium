@@ -7,7 +7,7 @@ use gpui::{div, prelude::*, px, rgb, Div};
 
 use atrium_core::theme::ThemePalette;
 use atrium_terminal::{TerminalSession, TerminalStyledLine};
-use atrium_terminal::styled::DEFAULT_FG;
+use atrium_terminal::types::DEFAULT_FG;
 
 pub const CELL_WIDTH: f32 = 9.0;
 pub const LINE_HEIGHT: f32 = 19.0;

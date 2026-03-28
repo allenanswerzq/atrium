@@ -9,7 +9,7 @@
 //!                     └─→ plain_output()  → String
 //! ```
 
-use crate::styled::{
+use crate::types::{
     TerminalCursor, TerminalModes, TerminalStyledCell, TerminalStyledLine, TerminalStyledRun,
     DEFAULT_BG, DEFAULT_FG,
 };

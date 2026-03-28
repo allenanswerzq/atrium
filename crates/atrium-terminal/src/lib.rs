@@ -1,30 +1,24 @@
 //! # atrium-terminal
 //!
 //! Terminal emulation, PTY management, and session lifecycle.
+//! GUI-agnostic — any UI (GPUI, web, TUI) can consume this.
 //!
-//! This crate is **GUI-agnostic** — it provides the terminal backend
-//! that any UI (GPUI, web, TUI) can consume.
+//! ## Modules
 //!
+//! - `types`    — Styled output types, protocol types, requests, snapshots
+//! - `emulator` — TerminalEmulator (vt100-backed ANSI parser)
+//! - `pty`      — TerminalPty (portable-pty wrapper)
+//! - `session`  — TerminalSession, TerminalRuntime, service, store, keys
 
-pub mod daemon;
 pub mod emulator;
-pub mod keys;
 pub mod pty;
 pub mod session;
-pub mod store;
-pub mod styled;
 pub mod types;
 
-// Re-export the most commonly used types at crate root.
-pub use daemon::{LocalTerminalService, TerminalService};
 pub use emulator::TerminalEmulator;
-pub use keys::terminal_escape_bytes;
 pub use pty::TerminalPty;
-pub use session::{TerminalRuntime, TerminalSession};
-pub use store::{JsonTerminalSessionStore, TerminalSessionStore};
-pub use styled::{TerminalCursor, TerminalModes, TerminalStyledCell, TerminalStyledLine, TerminalStyledRun};
-pub use types::{
-    TerminalCreateRequest, TerminalKillRequest, TerminalResizeRequest,
-    TerminalSessionRecord, TerminalSignal, TerminalSnapshot, TerminalState,
-    TerminalWriteRequest,
+pub use session::{
+    JsonTerminalSessionStore, LocalTerminalService, TerminalRuntime,
+    TerminalService, TerminalSession, TerminalSessionStore, terminal_escape_bytes,
 };
+pub use types::*;

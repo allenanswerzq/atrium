@@ -1,7 +1,4 @@
-//! Protocol types shared between frontend and backend.
-//!
-//! These are the wire types for terminal operations: requests,
-//! responses, signals, lifecycle states, and snapshots.
+//! Terminal types — styled output, protocol types, requests, snapshots.
 
 use std::path::PathBuf;
 
@@ -10,7 +7,44 @@ use strum::{Display, IntoStaticStr};
 
 use atrium_core::id::{TerminalSessionId, WorkspaceId};
 
-use crate::styled::{TerminalCursor, TerminalModes, TerminalStyledLine};
+// ── Styled output types ─────────────────────────────────────────────
+
+pub const DEFAULT_FG: u32 = 0xabb2bf;
+pub const DEFAULT_BG: u32 = 0x282c34;
+pub const DEFAULT_CURSOR: u32 = 0x74ade8;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TerminalStyledCell {
+    pub column: usize,
+    pub text: String,
+    pub fg: u32,
+    pub bg: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TerminalStyledRun {
+    pub text: String,
+    pub fg: u32,
+    pub bg: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TerminalStyledLine {
+    pub cells: Vec<TerminalStyledCell>,
+    pub runs: Vec<TerminalStyledRun>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct TerminalCursor {
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct TerminalModes {
+    pub app_cursor: bool,
+    pub alt_screen: bool,
+}
 
 // ── Requests ────────────────────────────────────────────────────────
 
