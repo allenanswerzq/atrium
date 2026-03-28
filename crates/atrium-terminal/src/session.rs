@@ -1,11 +1,12 @@
 //! Terminal session and runtime.
 //!
-//! `TerminalRuntime` owns the live PTY, reader task, and shared output buffer.
+//! `TerminalRuntime` owns the live PTY, emulator, and reader task.
 //! `TerminalSession` holds identity metadata + an optional runtime.
 //! A session without a runtime is "detached" (restored from disk, no live PTY).
 //!
 //! The reader runs as a blocking task on the centralized `TaskExecutor`,
-//! so it participates in graceful shutdown and metric tracking.
+//! feeding raw PTY bytes into the emulator. The GUI reads styled output
+//! from the emulator via the session.
 
 use std::io::Read;
 use std::sync::Arc;
@@ -15,23 +16,31 @@ use atrium_error::Result;
 use atrium_executor::TaskExecutor;
 use parking_lot::Mutex;
 
+use crate::emulator::TerminalEmulator;
 use crate::pty::TerminalPty;
+use crate::styled::{TerminalCursor, TerminalModes, TerminalStyledLine};
 use crate::types::{TerminalSessionRecord, TerminalSnapshot, TerminalState};
-use crate::styled::TerminalModes;
 
 // ── Runtime ─────────────────────────────────────────────────────────
 
-/// The live PTY backend — owns the process, reader task, and output buffer.
+/// The live PTY backend — owns the process, emulator, and reader task.
 ///
-/// Separated from `TerminalSession` so that a session can exist without
-/// a live PTY (e.g. restored from disk after restart).
-///
-/// The reader runs on `TaskExecutor::spawn_blocking` so it is tracked
-/// by the central task manager and cancelled on shutdown.
+// PTY stdout bytes
+//      │
+//      ▼
+// reader_loop() on TaskExecutor::spawn_blocking
+//      │
+//      ▼
+// TerminalEmulator.process(bytes)   ← vt100 parses ANSI
+//      │
+//      ├─→ styled_lines()  → colored cells with fg/bg
+//      ├─→ cursor()        → row, column position
+//      ├─→ modes()         → app_cursor, alt_screen
+//      └─→ plain_output()  → clean text for persistence
 pub struct TerminalRuntime {
     pty: TerminalPty,
-    /// Raw PTY output bytes — shared with the reader task.
-    raw_output: Arc<Mutex<String>>,
+    /// The emulator parses ANSI into styled cells. Shared with reader task.
+    emulator: Arc<Mutex<TerminalEmulator>>,
     /// Lifecycle state — set to `Completed` by the reader task on EOF.
     state: Arc<Mutex<TerminalState>>,
 }
@@ -46,21 +55,19 @@ impl TerminalRuntime {
         rows: u16,
     ) -> Result<Self> {
         let (pty, reader) = TerminalPty::spawn(shell, cwd, cols, rows)?;
-        let raw_output: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
+        let emulator = Arc::new(Mutex::new(TerminalEmulator::new(rows, cols)));
         let state: Arc<Mutex<TerminalState>> = Arc::new(Mutex::new(TerminalState::Running));
 
-        let out_ref = Arc::clone(&raw_output);
+        let emu_ref = Arc::clone(&emulator);
         let state_ref = Arc::clone(&state);
 
-        // Run the blocking PTY reader on the executor's thread pool.
-        // This is automatically cancelled on shutdown and tracked in metrics.
         executor.spawn_blocking(async move {
-            reader_loop(reader, out_ref, state_ref);
+            reader_loop(reader, emu_ref, state_ref);
         });
 
         Ok(Self {
             pty,
-            raw_output,
+            emulator,
             state,
         })
     }
@@ -75,30 +82,39 @@ impl TerminalRuntime {
         *self.state.lock()
     }
 
-    /// Whether the PTY has produced any output.
+    /// Current cursor position.
+    pub fn cursor(&self) -> TerminalCursor {
+        self.emulator.lock().cursor()
+    }
+
+    /// Current terminal modes.
+    pub fn modes(&self) -> TerminalModes {
+        self.emulator.lock().modes()
+    }
+
+    /// Get the visible grid as styled lines.
+    pub fn styled_lines(&self) -> Vec<TerminalStyledLine> {
+        self.emulator.lock().styled_lines()
+    }
+
+    /// Get plain text output from the emulator.
+    pub fn plain_output(&self) -> String {
+        self.emulator.lock().plain_output()
+    }
+
+    /// Whether the emulator has any content.
     pub fn has_output(&self) -> bool {
-        !self.raw_output.lock().is_empty()
+        // Check if any row has non-empty content
+        let emu = self.emulator.lock();
+        let lines = emu.styled_lines();
+        lines.iter().any(|l| l.runs.iter().any(|r| r.text.trim() != ""))
     }
 
-    /// Get current output as display lines (ANSI stripped).
+    /// Get output as simple display lines (for compatibility).
     pub fn output_lines(&self) -> Vec<String> {
-        let raw = self.raw_output.lock();
-        if raw.is_empty() {
-            return Vec::new();
-        }
-        raw.split('\n').map(|l| strip_ansi_and_cr(l)).collect()
-    }
-
-    /// Get a tail of the raw output for persistence.
-    pub fn output_tail(&self, max_bytes: usize) -> Option<String> {
-        let raw = self.raw_output.lock();
-        if raw.is_empty() {
-            None
-        } else if raw.len() > max_bytes {
-            Some(raw[raw.len() - max_bytes..].to_owned())
-        } else {
-            Some(raw.clone())
-        }
+        let emu = self.emulator.lock();
+        let plain = emu.plain_output();
+        plain.split('\n').map(|s| s.to_owned()).collect()
     }
 }
 
@@ -184,22 +200,42 @@ impl TerminalSession {
     // ── Snapshots ───────────────────────────────────────────────────
 
     pub fn snapshot(&self) -> TerminalSnapshot {
-        let lines = self.output_lines();
-        let output = lines.join("\n");
-        TerminalSnapshot {
-            session_id: self.session_id.clone(),
-            output,
-            styled_lines: Vec::new(),
-            cursor: None,
-            modes: TerminalModes::default(),
-            exit_code: None,
-            state: self.state(),
-            updated_at_unix_ms: None,
+        if let Some(rt) = &self.runtime {
+            let emu = rt.emulator.lock();
+            TerminalSnapshot {
+                session_id: self.session_id.clone(),
+                output: emu.plain_output(),
+                styled_lines: emu.styled_lines(),
+                cursor: Some(emu.cursor()),
+                modes: emu.modes(),
+                exit_code: None,
+                state: rt.state(),
+                updated_at_unix_ms: None,
+            }
+        } else {
+            TerminalSnapshot {
+                session_id: self.session_id.clone(),
+                output: String::new(),
+                styled_lines: Vec::new(),
+                cursor: None,
+                modes: TerminalModes::default(),
+                exit_code: None,
+                state: TerminalState::Completed,
+                updated_at_unix_ms: None,
+            }
         }
     }
 
     pub fn record(&self) -> TerminalSessionRecord {
-        let output_tail = self.runtime.as_ref().and_then(|r| r.output_tail(8192));
+        let output_tail = self.runtime.as_ref().map(|rt| {
+            let plain = rt.emulator.lock().plain_output();
+            let max = 8192;
+            if plain.len() > max {
+                plain[plain.len() - max..].to_owned()
+            } else {
+                plain
+            }
+        });
         TerminalSessionRecord {
             session_id: self.session_id.clone(),
             workspace_id: self.workspace_id.clone(),
@@ -218,11 +254,11 @@ impl TerminalSession {
     }
 }
 
-// ── Reader thread ───────────────────────────────────────────────────
+// ── Reader task ─────────────────────────────────────────────────────
 
 fn reader_loop(
     mut reader: Box<dyn Read + Send>,
-    output: Arc<Mutex<String>>,
+    emulator: Arc<Mutex<TerminalEmulator>>,
     state: Arc<Mutex<TerminalState>>,
 ) {
     let mut buf = [0u8; 4096];
@@ -230,42 +266,10 @@ fn reader_loop(
         match reader.read(&mut buf) {
             Ok(0) => break,
             Ok(n) => {
-                let text = String::from_utf8_lossy(&buf[..n]);
-                output.lock().push_str(&text);
+                emulator.lock().process(&buf[..n]);
             }
             Err(_) => break,
         }
     }
     *state.lock() = TerminalState::Completed;
-}
-
-// ── ANSI stripping ──────────────────────────────────────────────────
-
-/// Strip carriage returns and ANSI escape sequences for plain display.
-fn strip_ansi_and_cr(s: &str) -> String {
-    let mut result = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(ch) = chars.next() {
-        match ch {
-            '\r' => {}
-            '\x1b' => {
-                if chars.peek() == Some(&'[') {
-                    chars.next();
-                    for c in chars.by_ref() {
-                        if c.is_ascii_alphabetic() || c == '~' { break; }
-                    }
-                } else if chars.peek() == Some(&']') {
-                    chars.next();
-                    for c in chars.by_ref() {
-                        if c == '\x07' { break; }
-                        if c == '\x1b' { chars.next(); break; }
-                    }
-                } else {
-                    chars.next();
-                }
-            }
-            _ => result.push(ch),
-        }
-    }
-    result
 }

@@ -7,6 +7,7 @@
 //!
 
 pub mod daemon;
+pub mod emulator;
 pub mod keys;
 pub mod pty;
 pub mod session;
@@ -16,6 +17,7 @@ pub mod types;
 
 // Re-export the most commonly used types at crate root.
 pub use daemon::{LocalTerminalService, TerminalService};
+pub use emulator::TerminalEmulator;
 pub use keys::terminal_escape_bytes;
 pub use pty::TerminalPty;
 pub use session::{TerminalRuntime, TerminalSession};

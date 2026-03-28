@@ -14,6 +14,7 @@ atrium-platform = { workspace = true }
 
 portable-pty = { workspace = true }
 parking_lot  = { workspace = true }
+vt100        = { workspace = true }
 serde        = { workspace = true }
 serde_json   = { workspace = true }
 strum        = { workspace = true }
