@@ -11,12 +11,12 @@ use std::sync::{Arc, Mutex};
 use atrium_core::id::{SessionId, WorkspaceId};
 use atrium_error::Result;
 
-use crate::pty::PtyHandle;
-use crate::types::{SessionRecord, Snapshot, State};
-use crate::styled::Modes;
+use crate::pty::TerminalPty;
+use crate::types::{TerminalSessionRecord, TerminalSnapshot, TerminalState};
+use crate::styled::TerminalModes;
 
 /// A live terminal session backed by a PTY.
-pub struct LiveSession {
+pub struct TerminalSession {
     // ── Identity ────────────────────────────────────────────────────
     session_id: SessionId,
     workspace_id: WorkspaceId,
@@ -27,14 +27,14 @@ pub struct LiveSession {
     rows: u16,
 
     // ── Runtime ─────────────────────────────────────────────────────
-    pty: PtyHandle,
+    pty: TerminalPty,
     raw_output: Arc<Mutex<String>>,
-    state: Arc<Mutex<State>>,
+    state: Arc<Mutex<TerminalState>>,
     exit_code: Arc<Mutex<Option<i32>>>,
     _reader_thread: std::thread::JoinHandle<()>,
 }
 
-impl LiveSession {
+impl TerminalSession {
     /// Spawn a new live session.
     pub fn spawn(
         session_id: SessionId,
@@ -45,9 +45,9 @@ impl LiveSession {
         cols: u16,
         rows: u16,
     ) -> Result<Self> {
-        let (pty, reader) = PtyHandle::spawn(shell, &cwd, cols, rows)?;
+        let (pty, reader) = TerminalPty::spawn(shell, &cwd, cols, rows)?;
         let raw_output: Arc<Mutex<String>> = Arc::new(Mutex::new(String::new()));
-        let state: Arc<Mutex<State>> = Arc::new(Mutex::new(State::Running));
+        let state: Arc<Mutex<TerminalState>> = Arc::new(Mutex::new(TerminalState::Running));
         let exit_code: Arc<Mutex<Option<i32>>> = Arc::new(Mutex::new(None));
 
         let out_ref = Arc::clone(&raw_output);
@@ -80,8 +80,8 @@ impl LiveSession {
     pub fn cols(&self) -> u16 { self.cols }
     pub fn rows(&self) -> u16 { self.rows }
 
-    pub fn state(&self) -> State {
-        self.state.lock().map(|s| *s).unwrap_or(State::Failed)
+    pub fn state(&self) -> TerminalState {
+        self.state.lock().map(|s| *s).unwrap_or(TerminalState::Failed)
     }
 
     pub fn exit_code(&self) -> Option<i32> {
@@ -119,16 +119,16 @@ impl LiveSession {
     }
 
     /// Build a full snapshot of the current state.
-    pub fn snapshot(&self) -> Snapshot {
+    pub fn snapshot(&self) -> TerminalSnapshot {
         let lines = self.output_lines();
         let output = lines.join("\n");
 
-        Snapshot {
+        TerminalSnapshot {
             session_id: self.session_id.clone(),
             output,
-            styled_lines: Vec::new(), // TODO: populate from emulator
-            cursor: None,             // TODO: populate from emulator
-            modes: Modes::default(),
+            styled_lines: Vec::new(),
+            cursor: None,
+            modes: TerminalModes::default(),
             exit_code: self.exit_code(),
             state: self.state(),
             updated_at_unix_ms: None,
@@ -136,13 +136,13 @@ impl LiveSession {
     }
 
     /// Build a persistence record.
-    pub fn record(&self) -> SessionRecord {
+    pub fn record(&self) -> TerminalSessionRecord {
         let output_tail = self.raw_output.lock().ok().map(|s| {
             let max = 8192;
             if s.len() > max { s[s.len() - max..].to_owned() } else { s.clone() }
         });
 
-        SessionRecord {
+        TerminalSessionRecord {
             session_id: self.session_id.clone(),
             workspace_id: self.workspace_id.clone(),
             cwd: self.cwd.clone(),
@@ -165,7 +165,7 @@ impl LiveSession {
 fn reader_loop(
     mut reader: Box<dyn Read + Send>,
     output: Arc<Mutex<String>>,
-    state: Arc<Mutex<State>>,
+    state: Arc<Mutex<TerminalState>>,
 ) {
     let mut buf = [0u8; 4096];
     loop {
@@ -182,7 +182,7 @@ fn reader_loop(
     }
     // Process exited
     if let Ok(mut s) = state.lock() {
-        *s = State::Completed;
+        *s = TerminalState::Completed;
     }
 }
 

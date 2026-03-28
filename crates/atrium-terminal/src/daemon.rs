@@ -1,36 +1,37 @@
-//! Terminal daemon — manages multiple live sessions.
+//! Terminal service — manages multiple live sessions.
 //!
-//! `TerminalDaemon` is the trait that frontends code against.
-//! `LocalDaemon` is the concrete impl that spawns local PTY sessions.
+//! `TerminalService` is the trait that frontends code against.
+//! `LocalTerminalService` is the concrete impl that spawns local PTY sessions.
 
 use std::collections::HashMap;
 
 use atrium_core::id::SessionId;
 use atrium_error::{Error, ErrorKind, Result};
 
-use crate::session::LiveSession;
+use crate::session::TerminalSession;
 use crate::types::{
-    CreateRequest, KillRequest, SessionRecord, Snapshot, WriteRequest,
+    TerminalCreateRequest, TerminalKillRequest, TerminalSessionRecord,
+    TerminalSnapshot, TerminalWriteRequest,
 };
 
-/// The terminal daemon contract.
+/// The terminal service contract.
 ///
-/// Implemented by `LocalDaemon` (in-process PTY) and potentially
+/// Implemented by `LocalTerminalService` (in-process PTY) and potentially
 /// by an HTTP client for remote daemons.
-pub trait TerminalDaemon {
-    fn create(&mut self, request: CreateRequest) -> Result<SessionRecord>;
-    fn write(&self, request: WriteRequest) -> Result<()>;
-    fn kill(&mut self, request: KillRequest) -> Result<()>;
-    fn snapshot(&self, session_id: &SessionId) -> Result<Snapshot>;
-    fn list_sessions(&self) -> Vec<SessionRecord>;
+pub trait TerminalService {
+    fn create(&mut self, request: TerminalCreateRequest) -> Result<TerminalSessionRecord>;
+    fn write(&self, request: TerminalWriteRequest) -> Result<()>;
+    fn kill(&mut self, request: TerminalKillRequest) -> Result<()>;
+    fn snapshot(&self, session_id: &SessionId) -> Result<TerminalSnapshot>;
+    fn list_sessions(&self) -> Vec<TerminalSessionRecord>;
 }
 
-/// Local daemon that manages PTY sessions in-process.
-pub struct LocalDaemon {
-    sessions: HashMap<SessionId, LiveSession>,
+/// Local terminal service that manages PTY sessions in-process.
+pub struct LocalTerminalService {
+    sessions: HashMap<SessionId, TerminalSession>,
 }
 
-impl LocalDaemon {
+impl LocalTerminalService {
     pub fn new() -> Self {
         Self {
             sessions: HashMap::new(),
@@ -38,7 +39,7 @@ impl LocalDaemon {
     }
 
     /// Get a reference to a live session.
-    pub fn session(&self, id: &SessionId) -> Option<&LiveSession> {
+    pub fn session(&self, id: &SessionId) -> Option<&TerminalSession> {
         self.sessions.get(id)
     }
 
@@ -48,15 +49,15 @@ impl LocalDaemon {
     }
 }
 
-impl Default for LocalDaemon {
+impl Default for LocalTerminalService {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl TerminalDaemon for LocalDaemon {
-    fn create(&mut self, req: CreateRequest) -> Result<SessionRecord> {
-        let session = LiveSession::spawn(
+impl TerminalService for LocalTerminalService {
+    fn create(&mut self, req: TerminalCreateRequest) -> Result<TerminalSessionRecord> {
+        let session = TerminalSession::spawn(
             req.session_id.clone(),
             req.workspace_id,
             req.cwd,
@@ -71,7 +72,7 @@ impl TerminalDaemon for LocalDaemon {
         Ok(record)
     }
 
-    fn write(&self, req: WriteRequest) -> Result<()> {
+    fn write(&self, req: TerminalWriteRequest) -> Result<()> {
         let session = self.sessions.get(&req.session_id).ok_or_else(|| {
             Error::new(ErrorKind::NotFound, "session not found")
                 .with_context("session_id", req.session_id.to_string())
@@ -79,7 +80,7 @@ impl TerminalDaemon for LocalDaemon {
         session.write(&req.bytes)
     }
 
-    fn kill(&mut self, req: KillRequest) -> Result<()> {
+    fn kill(&mut self, req: TerminalKillRequest) -> Result<()> {
         if self.sessions.remove(&req.session_id).is_some() {
             Ok(())
         } else {
@@ -88,7 +89,7 @@ impl TerminalDaemon for LocalDaemon {
         }
     }
 
-    fn snapshot(&self, session_id: &SessionId) -> Result<Snapshot> {
+    fn snapshot(&self, session_id: &SessionId) -> Result<TerminalSnapshot> {
         let session = self.sessions.get(session_id).ok_or_else(|| {
             Error::new(ErrorKind::NotFound, "session not found")
                 .with_context("session_id", session_id.to_string())
@@ -96,7 +97,7 @@ impl TerminalDaemon for LocalDaemon {
         Ok(session.snapshot())
     }
 
-    fn list_sessions(&self) -> Vec<SessionRecord> {
+    fn list_sessions(&self) -> Vec<TerminalSessionRecord> {
         self.sessions.values().map(|s| s.record()).collect()
     }
 }

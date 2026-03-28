@@ -33,13 +33,14 @@ pub mod styled;
 pub mod types;
 
 // Re-export the most commonly used types at crate root.
-pub use daemon::{LocalDaemon, TerminalDaemon};
+pub use daemon::{LocalTerminalService, TerminalService};
 pub use keys::terminal_escape_bytes;
-pub use pty::PtyHandle;
-pub use session::LiveSession;
-pub use store::{JsonSessionStore, SessionStore};
-pub use styled::{Cursor, Modes, StyledCell, StyledLine, StyledRun};
+pub use pty::TerminalPty;
+pub use session::TerminalSession;
+pub use store::{JsonTerminalSessionStore, TerminalSessionStore};
+pub use styled::{TerminalCursor, TerminalModes, TerminalStyledCell, TerminalStyledLine, TerminalStyledRun};
 pub use types::{
-    CreateRequest, KillRequest, ResizeRequest, SessionRecord, Signal, Snapshot, State,
-    WriteRequest,
+    TerminalCreateRequest, TerminalKillRequest, TerminalResizeRequest,
+    TerminalSessionRecord, TerminalSignal, TerminalSnapshot, TerminalState,
+    TerminalWriteRequest,
 };

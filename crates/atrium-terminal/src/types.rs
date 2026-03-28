@@ -10,12 +10,12 @@ use strum::{Display, IntoStaticStr};
 
 use atrium_core::id::{SessionId, WorkspaceId};
 
-use crate::styled::{Cursor, Modes, StyledLine};
+use crate::styled::{TerminalCursor, TerminalModes, TerminalStyledLine};
 
 // ── Requests ────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateRequest {
+pub struct TerminalCreateRequest {
     pub session_id: SessionId,
     pub workspace_id: WorkspaceId,
     pub cwd: PathBuf,
@@ -27,20 +27,20 @@ pub struct CreateRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WriteRequest {
+pub struct TerminalWriteRequest {
     pub session_id: SessionId,
     pub bytes: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResizeRequest {
+pub struct TerminalResizeRequest {
     pub session_id: SessionId,
     pub cols: u16,
     pub rows: u16,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KillRequest {
+pub struct TerminalKillRequest {
     pub session_id: SessionId,
 }
 
@@ -49,7 +49,7 @@ pub struct KillRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
-pub enum Signal {
+pub enum TerminalSignal {
     Interrupt,
     Terminate,
     Kill,
@@ -60,7 +60,7 @@ pub enum Signal {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
-pub enum State {
+pub enum TerminalState {
     #[default]
     Running,
     Completed,
@@ -71,14 +71,14 @@ pub enum State {
 
 /// A point-in-time snapshot of terminal state.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Snapshot {
+pub struct TerminalSnapshot {
     pub session_id: SessionId,
     pub output: String,
-    pub styled_lines: Vec<StyledLine>,
-    pub cursor: Option<Cursor>,
-    pub modes: Modes,
+    pub styled_lines: Vec<TerminalStyledLine>,
+    pub cursor: Option<TerminalCursor>,
+    pub modes: TerminalModes,
     pub exit_code: Option<i32>,
-    pub state: State,
+    pub state: TerminalState,
     pub updated_at_unix_ms: Option<u64>,
 }
 
@@ -86,7 +86,7 @@ pub struct Snapshot {
 
 /// Persisted session metadata (survives restarts).
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SessionRecord {
+pub struct TerminalSessionRecord {
     pub session_id: SessionId,
     pub workspace_id: WorkspaceId,
     pub cwd: PathBuf,
@@ -98,7 +98,7 @@ pub struct SessionRecord {
     pub last_command: Option<String>,
     pub output_tail: Option<String>,
     pub exit_code: Option<i32>,
-    pub state: Option<State>,
+    pub state: Option<TerminalState>,
     pub updated_at_unix_ms: Option<u64>,
 }
 

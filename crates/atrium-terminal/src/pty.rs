@@ -13,15 +13,15 @@ use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 /// Handle to a spawned PTY process.
 ///
 /// Owns the master PTY, child process, and writer. The reader is
-/// returned separately from [`PtyHandle::spawn`] for the caller to
+/// returned separately from [`TerminalPty::spawn`] for the caller to
 /// consume in a background thread.
-pub struct PtyHandle {
+pub struct TerminalPty {
     writer: Arc<Mutex<Box<dyn Write + Send>>>,
     _master: Box<dyn MasterPty + Send>,
     _child: Box<dyn portable_pty::Child + Send + Sync>,
 }
 
-impl PtyHandle {
+impl TerminalPty {
     /// Spawn a shell in a new PTY.
     ///
     /// Returns `(handle, reader)`. The reader blocks until output is

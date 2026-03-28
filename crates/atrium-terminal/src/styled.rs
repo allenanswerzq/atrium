@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 /// A single character cell in the terminal grid.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StyledCell {
+pub struct TerminalStyledCell {
     /// Grid column (0-based).
     pub column: usize,
     /// The character(s) at this position.
@@ -24,7 +24,7 @@ pub struct StyledCell {
 /// Merging adjacent same-styled cells into runs reduces the number of
 /// draw calls in the renderer.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StyledRun {
+pub struct TerminalStyledRun {
     pub text: String,
     pub fg: u32,
     pub bg: u32,
@@ -32,21 +32,21 @@ pub struct StyledRun {
 
 /// One line of terminal output, in both cell and run form.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StyledLine {
-    pub cells: Vec<StyledCell>,
-    pub runs: Vec<StyledRun>,
+pub struct TerminalStyledLine {
+    pub cells: Vec<TerminalStyledCell>,
+    pub runs: Vec<TerminalStyledRun>,
 }
 
 /// Cursor position in the terminal grid.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-pub struct Cursor {
+pub struct TerminalCursor {
     pub line: usize,
     pub column: usize,
 }
 
 /// Terminal mode flags that affect rendering and input behavior.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
-pub struct Modes {
+pub struct TerminalModes {
     /// Application cursor mode — arrow keys emit SS3 sequences.
     pub app_cursor: bool,
     /// Alternate screen buffer is active (for TUIs like vim).

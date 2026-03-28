@@ -2,7 +2,7 @@
 //!
 //! Pure functions, no UI framework dependency.
 
-use crate::styled::Modes;
+use crate::styled::TerminalModes;
 
 /// Convert a key name + modifiers to terminal escape bytes.
 ///
@@ -12,7 +12,7 @@ pub fn terminal_escape_bytes(
     key: &str,
     ctrl: bool,
     alt: bool,
-    _modes: Modes,
+    _modes: TerminalModes,
 ) -> Option<Vec<u8>> {
     if ctrl {
         return ctrl_byte(key);
@@ -84,7 +84,7 @@ fn ctrl_byte(key: &str) -> Option<Vec<u8>> {
 mod tests {
     use super::*;
 
-    fn modes() -> Modes { Modes::default() }
+    fn modes() -> TerminalModes { TerminalModes::default() }
 
     #[test]
     fn basic_keys() {
