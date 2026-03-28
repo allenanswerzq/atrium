@@ -55,7 +55,7 @@ impl AtriumApp {
                 app_id: Some(APP_ID.to_owned()),
                 ..Default::default()
             },
-            |_, cx| cx.new(|_cx| AtriumWindow::new()),
+            |_, cx| cx.new(|cx| AtriumWindow::new(cx)),
         ) {
             tracing::error!(%error, "failed to open Atrium window");
         }
