@@ -66,23 +66,6 @@ pub enum AgentChatStatus {
     Exited,
 }
 
-/// Transport used by an agent chat session.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum AgentChatTransport {
-    Acp,
-    OpenAiChat {
-        base_url: String,
-        api_key: Option<String>,
-    },
-}
-
-impl Default for AgentChatTransport {
-    fn default() -> Self {
-        Self::Acp
-    }
-}
-
 // ── Messages ────────────────────────────────────────────────────────
 
 /// A message in the conversation history.
@@ -151,11 +134,10 @@ pub struct AgentChatRecord {
     pub id: String,
     pub agent_kind: String,
     pub workspace_path: PathBuf,
-    pub session_name: String,
     #[serde(default)]
     pub model_id: Option<String>,
     #[serde(default)]
-    pub transport: AgentChatTransport,
+    pub transport: crate::transport::TransportConfig,
     pub messages: Vec<ChatMessage>,
     pub input_tokens: u64,
     pub output_tokens: u64,

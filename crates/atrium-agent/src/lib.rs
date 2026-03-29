@@ -1,22 +1,23 @@
 //! # atrium-agent
 //!
-//! Agent chat sessions, presets, and transport backends.
-//!
-//! GUI-agnostic — provides the agent backend that any UI can consume.
+//! Agent chat sessions and transport backends.
 //!
 //! ## Modules
 //!
-//! - `types`   — IDs, enums, messages, events, persistence
-//! - `preset`  — AgentKind (supported agents + default commands)
-//! - `session` — AgentChatSession + AgentChatManager
+//! - `types`     — IDs, enums, messages, events, persistence
+//! - `kind`      — AgentKind enum (supported agents)
+//! - `transport` — Transport trait + ACP / Terminal / OpenAI implementations
+//! - `session`   — AgentChatSession + AgentChatManager
 
-pub mod preset;
+pub mod kind;
 pub mod session;
+pub mod transport;
 pub mod types;
 
-pub use preset::AgentKind;
+pub use kind::AgentKind;
 pub use session::{AgentChatManager, AgentChatSession};
+pub use transport::{Transport, TransportConfig};
 pub use types::{
-    AgentChatEvent, AgentChatStatus, AgentChatTransport, AgentProvider,
+    AgentChatEvent, AgentChatStatus, AgentProvider,
     AgentSessionId, AgentState, ChatMessage,
 };

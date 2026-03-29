@@ -2,25 +2,27 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use tokio::sync::broadcast;
 
-use crate::preset::AgentKind;
+use crate::kind::AgentKind;
+use crate::transport::{self, PromptRequest, Transport, TransportConfig};
 use crate::types::{
-    AgentChatEvent, AgentChatStatus, AgentChatTransport, AgentSessionId,
+    AgentChatEvent, AgentChatStatus, AgentSessionId,
     AgentSessionSummary, ChatMessage,
 };
 
 // ── Session ─────────────────────────────────────────────────────────
 
 /// A single agent chat session.
+///
+/// Holds a [`Transport`] that is created once and reused for every turn.
 pub struct AgentChatSession {
     pub id: AgentSessionId,
     pub agent_kind: AgentKind,
     pub workspace_path: PathBuf,
-    pub session_name: String,
     pub model_id: Option<String>,
-    pub transport: AgentChatTransport,
     pub event_tx: broadcast::Sender<AgentChatEvent>,
     pub messages: Vec<ChatMessage>,
     pub pending_text: String,
@@ -31,15 +33,14 @@ pub struct AgentChatSession {
     pub turn_start_input_tokens: u64,
     pub turn_start_output_tokens: u64,
     pub turn_cancel: Option<tokio::sync::watch::Sender<bool>>,
+    /// The transport used for this session — created once, reused across turns.
+    transport: Arc<dyn Transport>,
 }
 
 impl AgentChatSession {
     /// Human-readable transport label.
     pub fn transport_label(&self) -> String {
-        match &self.transport {
-            AgentChatTransport::Acp => format!("acp:{}", self.agent_kind.key()),
-            AgentChatTransport::OpenAiChat { base_url, .. } => format!("openai:{base_url}"),
-        }
+        self.transport.label()
     }
 
     /// Finalize the current turn — move pending text into messages.
@@ -100,26 +101,25 @@ impl AgentChatManager {
         }
     }
 
-    pub fn create(
+    pub async fn create(
         &mut self,
         agent_kind: AgentKind,
         workspace_path: PathBuf,
         model_id: Option<String>,
-        transport: Option<AgentChatTransport>,
-    ) -> (AgentSessionId, broadcast::Receiver<AgentChatEvent>) {
+        config: TransportConfig,
+    ) -> Result<(AgentSessionId, broadcast::Receiver<AgentChatEvent>), String> {
         let id = self.next_id;
         self.next_id += 1;
         let session_id = AgentSessionId::new(format!("agent-chat-{id}"));
-        let session_name = format!("atrium-{session_id}");
         let (event_tx, event_rx) = broadcast::channel::<AgentChatEvent>(256);
+
+        let transport = transport::create(config, workspace_path.clone()).await?;
 
         let session = AgentChatSession {
             id: session_id.clone(),
             agent_kind,
             workspace_path,
-            session_name,
             model_id,
-            transport: transport.unwrap_or_default(),
             event_tx,
             messages: Vec::new(),
             pending_text: String::new(),
@@ -130,11 +130,16 @@ impl AgentChatManager {
             turn_start_input_tokens: 0,
             turn_start_output_tokens: 0,
             turn_cancel: None,
+            transport: Arc::from(transport),
         };
 
-        tracing::info!(session_id = %session_id, transport = %session.transport_label(), "created agent chat session");
+        tracing::info!(
+            session_id = %session_id,
+            transport = %session.transport_label(),
+            "created agent chat session"
+        );
         self.sessions.insert(session_id.clone(), session);
-        (session_id, event_rx)
+        Ok((session_id, event_rx))
     }
 
     pub fn send_message(&mut self, session_id: &AgentSessionId, message: String) -> Result<(), String> {
@@ -148,9 +153,42 @@ impl AgentChatManager {
             tool_calls: Vec::new(), input_tokens: 0, output_tokens: 0,
             model_id: None, transport_label: None,
         });
-        let _ = session.event_tx.send(AgentChatEvent::UserMessage { content: message });
+        let _ = session.event_tx.send(AgentChatEvent::UserMessage { content: message.clone() });
         session.status = AgentChatStatus::Working;
+        session.turn_start_input_tokens = session.input_tokens;
+        session.turn_start_output_tokens = session.output_tokens;
         let _ = session.event_tx.send(AgentChatEvent::TurnStarted);
+
+        let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+        session.turn_cancel = Some(cancel_tx);
+
+        let transport = Arc::clone(&session.transport);
+        let model_id = session.model_id.clone();
+        let messages = session.messages.clone();
+        let event_tx = session.event_tx.clone();
+
+        tokio::spawn(async move {
+            let req = PromptRequest {
+                prompt: &message,
+                messages: &messages,
+                model_id: model_id.as_deref(),
+                event_tx: &event_tx,
+                cancel_rx,
+            };
+
+            let result = transport.prompt(req).await;
+
+            match result {
+                Ok(()) => {
+                    let _ = event_tx.send(AgentChatEvent::TurnCompleted);
+                }
+                Err(msg) => {
+                    let _ = event_tx.send(AgentChatEvent::Error { message: msg });
+                    let _ = event_tx.send(AgentChatEvent::TurnCompleted);
+                }
+            }
+        });
+
         Ok(())
     }
 

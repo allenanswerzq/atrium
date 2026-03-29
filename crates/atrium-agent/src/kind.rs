@@ -1,4 +1,4 @@
-//! Agent preset definitions — supported agents and their default commands.
+//! Agent kind — supported agent types and their default commands.
 
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter, EnumString, IntoStaticStr};
@@ -20,12 +20,12 @@ pub enum AgentKind {
 }
 
 impl AgentKind {
-    /// The acpx subcommand key. Same as `Display` output.
+    /// The identifier key. Same as `Display` output.
     pub fn key(self) -> &'static str {
         self.into()
     }
 
-    /// Default shell command to launch this agent.
+    /// Default shell command to launch this agent interactively.
     pub fn default_command(self) -> &'static str {
         match self {
             Self::Claude => "claude --dangerously-skip-permissions",
@@ -35,29 +35,6 @@ impl AgentKind {
             Self::Gemini => "gemini",
             Self::OpenCode => "opencode",
             Self::Pi => "pi",
-        }
-    }
-}
-
-/// A configured agent preset (kind + optional custom command).
-#[derive(Debug, Clone)]
-pub struct AgentPreset {
-    pub kind: AgentKind,
-    pub command: String,
-}
-
-impl AgentPreset {
-    pub fn new(kind: AgentKind) -> Self {
-        Self {
-            command: kind.default_command().to_owned(),
-            kind,
-        }
-    }
-
-    pub fn with_command(kind: AgentKind, command: impl Into<String>) -> Self {
-        Self {
-            kind,
-            command: command.into(),
         }
     }
 }
