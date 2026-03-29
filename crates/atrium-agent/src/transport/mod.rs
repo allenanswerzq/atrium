@@ -21,18 +21,16 @@ use std::path::PathBuf;
 
 use atrium_error::Result;
 use atrium_executor::TaskExecutor;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
 use crate::types::{AgentChatEvent, ChatMessage};
 
 // ── Trait ────────────────────────────────────────────────────────────
 
-/// Request passed to [`Transport::prompt`].
+/// Per-turn request passed to [`Transport::prompt`].
 pub struct PromptRequest<'a> {
     /// Full conversation history (including the current user message as last entry).
     pub messages: &'a [ChatMessage],
-    /// Broadcast channel for streaming events back to the session.
-    pub event_tx: &'a broadcast::Sender<AgentChatEvent>,
     /// Cancel signal — send `true` to abort the current turn.
     pub cancel_rx: tokio::sync::watch::Receiver<bool>,
 }
@@ -49,13 +47,20 @@ impl<'a> PromptRequest<'a> {
     }
 }
 
+/// Sender type for streaming events from transports.
+pub type EventSender = mpsc::UnboundedSender<AgentChatEvent>;
+/// Receiver type for consuming events from transports.
+pub type EventReceiver = mpsc::UnboundedReceiver<AgentChatEvent>;
+
 /// A transport handles communication with an AI agent.
 ///
 /// Created once per session, reused across turns. Must be `Send + Sync`
 /// so it can be held across `.await` points and shared with spawned tasks.
+///
+/// Events are sent through the [`EventSender`] provided at creation time.
 #[async_trait::async_trait]
 pub trait Transport: Send + Sync {
-    /// Send a prompt and stream response events via `req.event_tx`.
+    /// Send a prompt and stream response events via the transport's event sender.
     ///
     /// Blocks until the turn completes or is cancelled. The caller sends
     /// `TurnCompleted` / `Error` events after this returns.
@@ -136,14 +141,15 @@ pub async fn create(
     config: TransportConfig,
     workspace_path: PathBuf,
     executor: &TaskExecutor,
+    event_tx: EventSender,
 ) -> Result<Box<dyn Transport>> {
     match config {
         TransportConfig::Acp { program, args } => {
-            let t = acp::AcpTransport::spawn(program, args, workspace_path, executor).await?;
+            let t = acp::AcpTransport::spawn(program, args, workspace_path, executor, event_tx).await?;
             Ok(Box::new(t))
         }
         TransportConfig::Terminal { program, base_args } => {
-            let t = terminal::TerminalTransport::new(program, base_args, workspace_path);
+            let t = terminal::TerminalTransport::new(program, base_args, workspace_path, event_tx);
             Ok(Box::new(t))
         }
         TransportConfig::OpenAi {
@@ -151,7 +157,7 @@ pub async fn create(
             api_key,
             model,
         } => {
-            let t = openai::OpenAiTransport::new(base_url, api_key, model);
+            let t = openai::OpenAiTransport::new(base_url, api_key, model, event_tx);
             Ok(Box::new(t))
         }
         TransportConfig::Anthropic {
@@ -159,7 +165,7 @@ pub async fn create(
             api_key,
             model,
         } => {
-            let t = anthropic::AnthropicTransport::new(base_url, api_key, model);
+            let t = anthropic::AnthropicTransport::new(base_url, api_key, model, event_tx);
             Ok(Box::new(t))
         }
         TransportConfig::Responses {
@@ -167,7 +173,7 @@ pub async fn create(
             api_key,
             model,
         } => {
-            let t = responses::ResponsesTransport::new(base_url, api_key, model);
+            let t = responses::ResponsesTransport::new(base_url, api_key, model, event_tx);
             Ok(Box::new(t))
         }
     }

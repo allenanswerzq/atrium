@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use atrium_error::{Error, ErrorKind, Result};
 
-use super::{PromptRequest, Transport};
+use super::{EventSender, PromptRequest, Transport};
 use crate::types::AgentChatEvent;
 
 /// Connect timeout for the HTTP client.
@@ -21,10 +21,11 @@ pub struct OpenAiTransport {
     base_url: String,
     api_key: Option<String>,
     model: Option<String>,
+    event_tx: EventSender,
 }
 
 impl OpenAiTransport {
-    pub fn new(base_url: String, api_key: Option<String>, model: Option<String>) -> Self {
+    pub fn new(base_url: String, api_key: Option<String>, model: Option<String>, event_tx: EventSender) -> Self {
         let client = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .build()
@@ -34,6 +35,7 @@ impl OpenAiTransport {
             base_url,
             api_key,
             model,
+            event_tx,
         }
     }
 }
@@ -78,7 +80,7 @@ impl Transport for OpenAiTransport {
             );
         }
 
-        let event_tx = req.event_tx.clone();
+        let event_tx = self.event_tx.clone();
         let mut cancel_rx = req.cancel_rx;
 
         consume_sse_stream(response, &mut cancel_rx, |data| {

@@ -13,9 +13,9 @@ use std::time::Duration;
 use atrium_error::{Error, ErrorKind, Result};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin};
-use tokio::sync::{Mutex, broadcast, oneshot};
+use tokio::sync::{Mutex, oneshot};
 
-use super::{PromptRequest, Transport};
+use super::{EventSender, PromptRequest, Transport};
 use crate::types::AgentChatEvent;
 
 // ── JSON-RPC wire types ─────────────────────────────────────────────
@@ -165,8 +165,6 @@ impl AcpConn {
 pub struct AcpTransport {
     conn: Arc<AcpConn>,
     session_id: String,
-    /// Swapped before each prompt so the reader routes events to the right channel.
-    event_tx: Arc<tokio::sync::watch::Sender<broadcast::Sender<AgentChatEvent>>>,
     label: String,
 }
 
@@ -177,6 +175,7 @@ impl AcpTransport {
         args: Vec<String>,
         workspace_path: PathBuf,
         executor: &atrium_executor::TaskExecutor,
+        event_tx: EventSender,
     ) -> Result<Self> {
         let label = format!("acp:{program}");
 
@@ -199,9 +198,6 @@ impl AcpTransport {
             .take()
             .ok_or_else(|| Error::new(ErrorKind::Io, "no stdout"))?;
 
-        let (placeholder_tx, _) = broadcast::channel::<AgentChatEvent>(1);
-        let (event_watch_tx, event_watch_rx) = tokio::sync::watch::channel(placeholder_tx);
-
         let conn = Arc::new(AcpConn {
             writer: Mutex::new(stdin),
             pending: Mutex::new(HashMap::new()),
@@ -209,7 +205,7 @@ impl AcpTransport {
         });
 
         // Spawn the reader as a regular tokio task (Send!).
-        Self::spawn_reader(executor, Arc::clone(&conn), stdout, event_watch_rx, child);
+        Self::spawn_reader(executor, Arc::clone(&conn), stdout, event_tx, child);
 
         // Initialize.
         conn.request(
@@ -255,7 +251,6 @@ impl AcpTransport {
         Ok(Self {
             conn,
             session_id,
-            event_tx: Arc::new(event_watch_tx),
             label,
         })
     }
@@ -265,7 +260,7 @@ impl AcpTransport {
         executor: &atrium_executor::TaskExecutor,
         conn: Arc<AcpConn>,
         stdout: tokio::process::ChildStdout,
-        event_rx: tokio::sync::watch::Receiver<broadcast::Sender<AgentChatEvent>>,
+        event_tx: EventSender,
         child: Child,
     ) {
         executor.spawn(async move {
@@ -300,7 +295,7 @@ impl AcpTransport {
                     // Session notification (no id).
                     "session/update" => {
                         if let Some(params) = msg.get("params") {
-                            Self::handle_notification(params, &event_rx);
+                            Self::handle_notification(params, &event_tx);
                         }
                     }
                     // Permission request — auto-approve.
@@ -341,12 +336,11 @@ impl AcpTransport {
 
     fn handle_notification(
         params: &serde_json::Value,
-        event_rx: &tokio::sync::watch::Receiver<broadcast::Sender<AgentChatEvent>>,
+        event_tx: &EventSender,
     ) {
         let Some(update) = params.get("update") else {
             return;
         };
-        let tx = event_rx.borrow();
         let kind = update
             .get("sessionUpdate")
             .and_then(|v| v.as_str())
@@ -355,14 +349,14 @@ impl AcpTransport {
         match kind {
             "agent_message_chunk" => {
                 if let Some(text) = update.pointer("/content/text").and_then(|v| v.as_str()) {
-                    let _ = tx.send(AgentChatEvent::MessageChunk {
+                    let _ = event_tx.send(AgentChatEvent::MessageChunk {
                         content: text.to_owned(),
                     });
                 }
             }
             "agent_thought_chunk" => {
                 if let Some(text) = update.pointer("/content/text").and_then(|v| v.as_str()) {
-                    let _ = tx.send(AgentChatEvent::ThoughtChunk {
+                    let _ = event_tx.send(AgentChatEvent::ThoughtChunk {
                         content: text.to_owned(),
                     });
                 }
@@ -376,7 +370,7 @@ impl AcpTransport {
                     .get("status")
                     .and_then(|v| v.as_str())
                     .unwrap_or_default();
-                let _ = tx.send(AgentChatEvent::ToolCall {
+                let _ = event_tx.send(AgentChatEvent::ToolCall {
                     name: name.to_owned(),
                     status: status.to_owned(),
                 });
@@ -390,7 +384,7 @@ impl AcpTransport {
                     .get("status")
                     .and_then(|v| v.as_str())
                     .unwrap_or_default();
-                let _ = tx.send(AgentChatEvent::ToolCall {
+                let _ = event_tx.send(AgentChatEvent::ToolCall {
                     name: name.to_owned(),
                     status: status.to_owned(),
                 });
@@ -405,9 +399,6 @@ impl AcpTransport {
 #[async_trait::async_trait]
 impl Transport for AcpTransport {
     async fn prompt(&self, req: PromptRequest<'_>) -> Result<()> {
-        // Route events to this prompt's channel.
-        let _ = self.event_tx.send(req.event_tx.clone());
-
         let conn = Arc::clone(&self.conn);
         let session_id = self.session_id.clone();
         let text = req.last_user_message().to_owned();

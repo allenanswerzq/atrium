@@ -9,7 +9,7 @@ use atrium_error::{Error, ErrorKind, Result};
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 
-use super::{PromptRequest, Transport};
+use super::{EventSender, PromptRequest, Transport};
 use crate::types::AgentChatEvent;
 
 /// Per-turn subprocess transport.
@@ -17,14 +17,16 @@ pub struct TerminalTransport {
     program: String,
     base_args: Vec<String>,
     workspace_path: PathBuf,
+    event_tx: EventSender,
 }
 
 impl TerminalTransport {
-    pub fn new(program: String, base_args: Vec<String>, workspace_path: PathBuf) -> Self {
+    pub fn new(program: String, base_args: Vec<String>, workspace_path: PathBuf, event_tx: EventSender) -> Self {
         Self {
             program,
             base_args,
             workspace_path,
+            event_tx,
         }
     }
 }
@@ -77,14 +79,14 @@ impl Transport for TerminalTransport {
                 line_result = lines.next_line() => {
                     match line_result {
                         Ok(Some(line)) if !line.trim().is_empty() => {
-                            let _ = req.event_tx.send(AgentChatEvent::MessageChunk {
+                            let _ = self.event_tx.send(AgentChatEvent::MessageChunk {
                                 content: format!("{line}\n"),
                             });
                         }
                         Ok(Some(_)) => {}
                         Ok(None) => break,
                         Err(e) => {
-                            let _ = req.event_tx.send(AgentChatEvent::Error {
+                            let _ = self.event_tx.send(AgentChatEvent::Error {
                                 message: format!("stdout read error: {e}"),
                             });
                             break;

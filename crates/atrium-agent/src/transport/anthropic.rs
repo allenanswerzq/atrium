@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use atrium_error::{Error, ErrorKind, Result};
 
-use super::{PromptRequest, Transport};
+use super::{EventSender, PromptRequest, Transport};
 use crate::types::AgentChatEvent;
 
 /// Connect timeout for the HTTP client.
@@ -24,10 +24,11 @@ pub struct AnthropicTransport {
     base_url: String,
     api_key: Option<String>,
     model: Option<String>,
+    event_tx: EventSender,
 }
 
 impl AnthropicTransport {
-    pub fn new(base_url: String, api_key: Option<String>, model: Option<String>) -> Self {
+    pub fn new(base_url: String, api_key: Option<String>, model: Option<String>, event_tx: EventSender) -> Self {
         let client = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .build()
@@ -37,6 +38,7 @@ impl AnthropicTransport {
             base_url,
             api_key,
             model,
+            event_tx,
         }
     }
 }
@@ -86,7 +88,7 @@ impl Transport for AnthropicTransport {
             );
         }
 
-        let event_tx = req.event_tx.clone();
+        let event_tx = self.event_tx.clone();
         let mut cancel_rx = req.cancel_rx;
 
         consume_anthropic_sse(response, &mut cancel_rx, &event_tx).await
@@ -110,7 +112,7 @@ impl Transport for AnthropicTransport {
 async fn consume_anthropic_sse(
     response: reqwest::Response,
     cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
-    event_tx: &tokio::sync::broadcast::Sender<AgentChatEvent>,
+    event_tx: &EventSender,
 ) -> Result<()> {
     use futures::StreamExt;
     let mut stream = response.bytes_stream();

@@ -13,7 +13,7 @@
 use atrium_agent::transport::{self, PromptRequest, TransportConfig};
 use atrium_agent::types::{AgentChatEvent, ChatMessage};
 use atrium_executor::TaskManager;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
 const BRIDGE_URL: &str = "http://localhost:5168/v1";
 
@@ -39,13 +39,12 @@ fn user_message(content: &str) -> ChatMessage {
 async fn prompt_and_collect(
     t: &dyn atrium_agent::Transport,
     messages: &[ChatMessage],
+    event_rx: &mut mpsc::UnboundedReceiver<AgentChatEvent>,
 ) -> String {
-    let (event_tx, mut event_rx) = broadcast::channel::<AgentChatEvent>(256);
     let (_cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
 
     let req = PromptRequest {
         messages,
-        event_tx: &event_tx,
         cancel_rx,
     };
 
@@ -78,10 +77,11 @@ async fn bridge_openai_chat_completions() {
         api_key: None,
         model: Some("claude-sonnet-4".to_owned()),
     };
-    let t = transport::create(cfg, cwd, &executor).await.unwrap();
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
+    let t = transport::create(cfg, cwd, &executor, event_tx).await.unwrap();
 
     let messages = [user_message("Reply with exactly: CHAT_OK")];
-    let text = prompt_and_collect(t.as_ref(), &messages).await;
+    let text = prompt_and_collect(t.as_ref(), &messages, &mut event_rx).await;
 
     println!("[chat/completions] claude-sonnet-4: {text}");
     assert!(text.contains("CHAT_OK"), "got: {text}");
@@ -105,10 +105,11 @@ async fn bridge_anthropic_messages() {
         api_key: None,
         model: Some("claude-sonnet-4".to_owned()),
     };
-    let t = transport::create(cfg, cwd, &executor).await.unwrap();
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
+    let t = transport::create(cfg, cwd, &executor, event_tx).await.unwrap();
 
     let messages = [user_message("Say hello in one word")];
-    let text = prompt_and_collect(t.as_ref(), &messages).await;
+    let text = prompt_and_collect(t.as_ref(), &messages, &mut event_rx).await;
 
     println!("[messages] claude-sonnet-4: {text}");
     assert!(!text.is_empty(), "expected non-empty response, got nothing");
@@ -132,10 +133,11 @@ async fn bridge_openai_responses() {
         api_key: None,
         model: Some("gpt-4.1".to_owned()),
     };
-    let t = transport::create(cfg, cwd, &executor).await.unwrap();
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
+    let t = transport::create(cfg, cwd, &executor, event_tx).await.unwrap();
 
     let messages = [user_message("Reply with exactly: RESPONSES_OK")];
-    let text = prompt_and_collect(t.as_ref(), &messages).await;
+    let text = prompt_and_collect(t.as_ref(), &messages, &mut event_rx).await;
 
     println!("[responses] gpt-4.1: {text}");
     assert!(text.contains("RESPONSES_OK"), "got: {text}");
@@ -159,10 +161,11 @@ async fn test_model(model: &str) {
         api_key: None,
         model: Some(model.to_owned()),
     };
-    let t = transport::create(cfg, cwd, &executor).await.unwrap();
+    let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
+    let t = transport::create(cfg, cwd, &executor, event_tx).await.unwrap();
 
     let messages = [user_message("Say hello in one word")];
-    let text = prompt_and_collect(t.as_ref(), &messages).await;
+    let text = prompt_and_collect(t.as_ref(), &messages, &mut event_rx).await;
 
     println!("[{model}] {text}");
     assert!(!text.is_empty(), "{model} returned empty response");

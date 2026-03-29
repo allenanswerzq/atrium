@@ -6,10 +6,10 @@ use std::sync::Arc;
 
 use atrium_error::{Error, ErrorKind, Result};
 use atrium_executor::TaskExecutor;
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
 use crate::kind::AgentKind;
-use crate::transport::{self, PromptRequest, Transport, TransportConfig};
+use crate::transport::{self, EventReceiver, EventSender, PromptRequest, Transport, TransportConfig};
 use crate::types::{
     AgentChatEvent, AgentChatStatus, AgentSessionId, AgentSessionSummary, ChatMessage,
 };
@@ -24,7 +24,7 @@ pub struct AgentChatSession {
     pub agent_kind: AgentKind,
     pub workspace_path: PathBuf,
     pub model_id: Option<String>,
-    pub event_tx: broadcast::Sender<AgentChatEvent>,
+    pub event_tx: EventSender,
     pub messages: Vec<ChatMessage>,
     pub pending_text: String,
     pub pending_tool_calls: Vec<String>,
@@ -126,7 +126,7 @@ impl AgentChatManager {
         agent_kind: AgentKind,
         workspace_path: PathBuf,
         model_id: Option<String>,
-    ) -> Result<(AgentSessionId, broadcast::Receiver<AgentChatEvent>)> {
+    ) -> Result<(AgentSessionId, EventReceiver)> {
         self.create_with_config(
             agent_kind,
             workspace_path,
@@ -143,10 +143,12 @@ impl AgentChatManager {
         workspace_path: PathBuf,
         model_id: Option<String>,
         config: TransportConfig,
-    ) -> Result<(AgentSessionId, broadcast::Receiver<AgentChatEvent>)> {
+    ) -> Result<(AgentSessionId, EventReceiver)> {
         let session_id = self.next_session_id();
-        let (event_tx, event_rx) = broadcast::channel::<AgentChatEvent>(256);
-        let transport = transport::create(config, workspace_path.clone(), &self.executor).await?;
+        let (event_tx, event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
+        let transport =
+            transport::create(config, workspace_path.clone(), &self.executor, event_tx.clone())
+                .await?;
 
         let session = AgentChatSession {
             id: session_id.clone(),
@@ -219,7 +221,6 @@ impl AgentChatManager {
 
         let req = PromptRequest {
             messages: &messages,
-            event_tx: &event_tx,
             cancel_rx,
         };
 

@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use atrium_error::{Error, ErrorKind, Result};
 
-use super::{PromptRequest, Transport};
+use super::{EventSender, PromptRequest, Transport};
 use crate::types::AgentChatEvent;
 
 /// Connect timeout for the HTTP client.
@@ -22,10 +22,11 @@ pub struct ResponsesTransport {
     base_url: String,
     api_key: Option<String>,
     model: Option<String>,
+    event_tx: EventSender,
 }
 
 impl ResponsesTransport {
-    pub fn new(base_url: String, api_key: Option<String>, model: Option<String>) -> Self {
+    pub fn new(base_url: String, api_key: Option<String>, model: Option<String>, event_tx: EventSender) -> Self {
         let client = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .build()
@@ -35,6 +36,7 @@ impl ResponsesTransport {
             base_url,
             api_key,
             model,
+            event_tx,
         }
     }
 }
@@ -78,7 +80,7 @@ impl Transport for ResponsesTransport {
             );
         }
 
-        let event_tx = req.event_tx.clone();
+        let event_tx = self.event_tx.clone();
         let mut cancel_rx = req.cancel_rx;
 
         consume_responses_sse(response, &mut cancel_rx, &event_tx).await
@@ -102,7 +104,7 @@ impl Transport for ResponsesTransport {
 async fn consume_responses_sse(
     response: reqwest::Response,
     cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
-    event_tx: &tokio::sync::broadcast::Sender<AgentChatEvent>,
+    event_tx: &EventSender,
 ) -> Result<()> {
     use futures::StreamExt;
     let mut stream = response.bytes_stream();

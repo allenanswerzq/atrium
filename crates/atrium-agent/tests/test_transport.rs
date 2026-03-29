@@ -4,12 +4,12 @@
 
 use std::time::Duration;
 
-use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 
 use atrium_agent::session::AgentChatManager;
 use atrium_agent::transport::TransportConfig;
 use atrium_agent::types::{AgentChatEvent, AgentChatStatus, ChatMessage};
-use atrium_agent::{AgentKind};
+use atrium_agent::AgentKind;
 use atrium_executor::TaskManager;
 
 fn new_test_manager() -> (AgentChatManager, TaskManager) {
@@ -18,16 +18,16 @@ fn new_test_manager() -> (AgentChatManager, TaskManager) {
     (mgr, tm)
 }
 
-async fn drain_turn(rx: &mut broadcast::Receiver<AgentChatEvent>, secs: u64) -> String {
+async fn drain_turn(rx: &mut mpsc::UnboundedReceiver<AgentChatEvent>, secs: u64) -> String {
     let mut text = String::new();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(secs);
     loop {
         match tokio::time::timeout_at(deadline, rx.recv()).await {
-            Ok(Ok(AgentChatEvent::MessageChunk { content })) => text.push_str(&content),
-            Ok(Ok(AgentChatEvent::TurnCompleted)) => return text,
-            Ok(Ok(AgentChatEvent::Error { message })) => panic!("transport error: {message}"),
-            Ok(Ok(_)) => {}
-            Ok(Err(e)) => panic!("channel error: {e}"),
+            Ok(Some(AgentChatEvent::MessageChunk { content })) => text.push_str(&content),
+            Ok(Some(AgentChatEvent::TurnCompleted)) => return text,
+            Ok(Some(AgentChatEvent::Error { message })) => panic!("transport error: {message}"),
+            Ok(Some(_)) => {}
+            Ok(None) => panic!("channel closed"),
             Err(_) => panic!("timed out after {secs}s"),
         }
     }
@@ -95,7 +95,7 @@ async fn event_sequence_on_failed_turn() {
 
     let mut events = Vec::new();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-    while let Ok(Ok(ev)) = tokio::time::timeout_at(deadline, rx.recv()).await {
+    while let Ok(Some(ev)) = tokio::time::timeout_at(deadline, rx.recv()).await {
         let done = matches!(ev, AgentChatEvent::TurnCompleted);
         events.push(ev);
         if done {
@@ -280,17 +280,18 @@ async fn copilot_acp_100_sessions() {
     let mut transports = Vec::with_capacity(N);
     for i in 0..N {
         let cfg = AgentKind::Copilot.default_acp_config();
-        let t = transport::create(cfg, cwd.clone(), &executor)
+        let (event_tx, event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
+        let t = transport::create(cfg, cwd.clone(), &executor, event_tx)
             .await
             .unwrap_or_else(|e| panic!("failed to create transport {i}: {e}"));
-        transports.push(t);
+        transports.push((t, event_rx));
     }
     println!("all {N} transports created");
 
     // Send prompts to all sessions in parallel.
     let start = std::time::Instant::now();
     let mut handles = Vec::with_capacity(N);
-    for (i, t) in transports.into_iter().enumerate() {
+    for (i, (t, mut event_rx)) in transports.into_iter().enumerate() {
         handles.push(tokio::spawn(async move {
             let msg = format!("Reply with exactly: BATCH_{i}");
             let messages = [ChatMessage {
@@ -302,17 +303,15 @@ async fn copilot_acp_100_sessions() {
                 model_id: None,
                 transport_label: None,
             }];
-            let (event_tx, mut event_rx) = broadcast::channel::<AgentChatEvent>(256);
             let (_cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
 
             let req = PromptRequest {
                 messages: &messages,
-                event_tx: &event_tx,
                 cancel_rx,
             };
             t.prompt(req).await.unwrap_or_else(|e| panic!("session {i} prompt failed: {e}"));
 
-            // Collect all message chunks that were broadcast during the prompt.
+            // Collect all message chunks from the mpsc receiver.
             let mut text = String::new();
             while let Ok(ev) = event_rx.try_recv() {
                 if let AgentChatEvent::MessageChunk { content } = ev {
