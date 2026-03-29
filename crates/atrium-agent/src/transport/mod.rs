@@ -1,7 +1,9 @@
 //! Agent transport trait and implementations.
 //!
 //! A [`Transport`] handles communication with an AI agent across turns.
-//! The session creates one transport at startup and reuses it for every prompt.
+//! The session creates one transport at startup and reuses it for every
+//! prompt. Events are streamed back through an [`EventSender`] (`mpsc`)
+//! provided at creation time.
 //!
 //! | Transport | Process model | Multi-turn |
 //! |-----------|--------------|------------|
@@ -135,8 +137,10 @@ impl Default for TransportConfig {
 
 /// Create a [`Transport`] from a [`TransportConfig`].
 ///
-/// For ACP, the agent process is spawned immediately and the ACP handshake
-/// (initialize + new_session) runs before this returns.
+/// The `event_tx` sender is cloned into the transport and used for all
+/// subsequent event streaming. For ACP, the agent process is spawned
+/// immediately and the ACP handshake (initialize + new_session) runs
+/// before this returns.
 pub async fn create(
     config: TransportConfig,
     workspace_path: PathBuf,

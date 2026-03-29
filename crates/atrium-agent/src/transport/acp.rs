@@ -1,8 +1,9 @@
 //! ACP transport — thin JSON-RPC 2.0 client over newline-delimited stdio.
 //!
-//! Fully `Send + Sync` — no dedicated thread, no `LocalSet`, no `Rc`.
-//! Spawns the agent binary once (e.g. `copilot --acp`), runs an I/O reader
-//! via `tokio::spawn`, and communicates using plain JSON-RPC messages.
+//! Fully `Send + Sync`. Spawns the agent binary once (e.g. `copilot --acp`),
+//! runs an I/O reader via `tokio::spawn`, and communicates using plain
+//! JSON-RPC messages. Events are sent through the `EventSender` provided
+//! at creation time.
 
 use std::collections::HashMap;
 use std::path::PathBuf;

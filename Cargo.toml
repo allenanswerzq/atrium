@@ -85,6 +85,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "registry"] }
 
 # Filesystem
 tempfile = "3"
+which    = "7"
+
+# System
+sysinfo  = "0.34"
 
 # UI
 gpui = "0.2.2"

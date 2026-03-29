@@ -17,6 +17,8 @@ tokio      = { workspace = true, features = ["process", "io-util", "sync", "rt",
 futures    = { workspace = true }
 reqwest    = { workspace = true }
 tracing    = { workspace = true }
+which      = { workspace = true }
+sysinfo    = { workspace = true }
 
 [lints]
 workspace = true
