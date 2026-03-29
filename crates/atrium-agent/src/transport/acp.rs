@@ -19,10 +19,15 @@ use crate::types::AgentChatEvent;
 
 // ── JSON-RPC wire types ─────────────────────────────────────────────
 
+/// Monotonic JSON-RPC request identifier.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
+struct RequestId(i64);
+
 #[derive(serde::Serialize)]
 struct RpcRequest<P: serde::Serialize> {
     jsonrpc: &'static str,
-    id: i64,
+    id: RequestId,
     method: &'static str,
     params: P,
 }
@@ -79,7 +84,7 @@ struct PromptParams {
 
 // ── Shared connection state ─────────────────────────────────────────
 
-type PendingMap = HashMap<i64, oneshot::Sender<serde_json::Value>>;
+type PendingMap = HashMap<RequestId, oneshot::Sender<serde_json::Value>>;
 
 struct AcpConn {
     writer: Mutex<ChildStdin>,
@@ -93,7 +98,7 @@ impl AcpConn {
         method: &'static str,
         params: P,
     ) -> Result<serde_json::Value> {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = RequestId(self.next_id.fetch_add(1, Ordering::Relaxed));
         let (tx, rx) = oneshot::channel();
         self.pending.lock().await.insert(id, tx);
 
@@ -103,19 +108,12 @@ impl AcpConn {
             method,
             params,
         };
-        let mut line = serde_json::to_string(&msg)
-            .map_err(|e| Error::new(ErrorKind::DataInvalid, "serialize failed").set_source(e))?;
+        let mut line = serde_json::to_string(&msg)?;
         line.push('\n');
 
-        self.writer
-            .lock()
-            .await
-            .write_all(line.as_bytes())
-            .await
-            .map_err(|e| Error::new(ErrorKind::Io, "write to agent failed").set_source(e))?;
+        self.writer.lock().await.write_all(line.as_bytes()).await?;
 
-        rx.await
-            .map_err(|_| Error::new(ErrorKind::ServiceUnavailable, "agent process exited"))
+        Ok(rx.await?)
     }
 
     async fn respond(&self, id: serde_json::Value, result: serde_json::Value) {
@@ -263,7 +261,8 @@ impl AcpTransport {
 
                 // Response to our request (has "id", no "method").
                 if msg.get("id").is_some() && msg.get("method").is_none() {
-                    let id_num = msg["id"].as_i64().unwrap_or(-1);
+                    let id_num: RequestId =
+                        serde_json::from_value(msg["id"].clone()).unwrap_or(RequestId(-1));
                     if let Some(tx) = conn.pending.lock().await.remove(&id_num) {
                         if let Some(result) = msg.get("result") {
                             let _ = tx.send(result.clone());

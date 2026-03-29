@@ -479,7 +479,9 @@ name = "atrium-error"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "serde_json",
  "strum 0.27.2",
+ "tokio",
 ]
 
 [[package]]
