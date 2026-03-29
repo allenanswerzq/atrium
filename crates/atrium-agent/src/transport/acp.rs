@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::time::Duration;
 
 use atrium_error::{Error, ErrorKind, Result};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -84,6 +85,9 @@ struct PromptParams {
 
 // ── Shared connection state ─────────────────────────────────────────
 
+/// Max time to wait for a single JSON-RPC response (handshake or prompt).
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(300);
+
 type PendingMap = HashMap<RequestId, oneshot::Sender<serde_json::Value>>;
 
 struct AcpConn {
@@ -113,7 +117,21 @@ impl AcpConn {
 
         self.writer.lock().await.write_all(line.as_bytes()).await?;
 
-        Ok(rx.await?)
+        match tokio::time::timeout(REQUEST_TIMEOUT, rx).await {
+            Ok(Ok(val)) => Ok(val),
+            Ok(Err(_)) => Err(Error::new(
+                ErrorKind::Unexpected,
+                format!("ACP request `{method}` channel closed"),
+            )),
+            Err(_) => {
+                // Clean up the pending entry on timeout.
+                self.pending.lock().await.remove(&id);
+                Err(Error::new(
+                    ErrorKind::Network,
+                    format!("ACP request `{method}` timed out after {REQUEST_TIMEOUT:?}"),
+                ))
+            }
+        }
     }
 
     async fn respond(&self, id: serde_json::Value, result: serde_json::Value) {
@@ -392,7 +410,7 @@ impl Transport for AcpTransport {
 
         let conn = Arc::clone(&self.conn);
         let session_id = self.session_id.clone();
-        let text = req.prompt.to_owned();
+        let text = req.last_user_message().to_owned();
         let mut cancel_rx = req.cancel_rx;
 
         let prompt_fut = async move {

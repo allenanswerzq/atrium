@@ -7,10 +7,14 @@
 //! |-----------|--------------|------------|
 //! | [`AcpTransport`](acp::AcpTransport) | Long-lived process via ACP | Server-managed sessions |
 //! | [`TerminalTransport`](terminal::TerminalTransport) | New subprocess per turn | Single-turn only |
-//! | [`OpenAiTransport`](openai::OpenAiTransport) | HTTP requests | Client sends full history |
+//! | [`OpenAiTransport`](openai::OpenAiTransport) | HTTP `/v1/chat/completions` | Client sends full history |
+//! | [`AnthropicTransport`](anthropic::AnthropicTransport) | HTTP `/v1/messages` | Client sends full history |
+//! | [`ResponsesTransport`](responses::ResponsesTransport) | HTTP `/v1/responses` | Client sends full history |
 
 pub mod acp;
+pub mod anthropic;
 pub mod openai;
+pub mod responses;
 pub mod terminal;
 
 use std::path::PathBuf;
@@ -25,16 +29,24 @@ use crate::types::{AgentChatEvent, ChatMessage};
 
 /// Request passed to [`Transport::prompt`].
 pub struct PromptRequest<'a> {
-    /// The new user message for this turn.
-    pub prompt: &'a str,
-    /// Full conversation history (including the current prompt as last message).
+    /// Full conversation history (including the current user message as last entry).
     pub messages: &'a [ChatMessage],
-    /// Optional model override.
-    pub model_id: Option<&'a str>,
     /// Broadcast channel for streaming events back to the session.
     pub event_tx: &'a broadcast::Sender<AgentChatEvent>,
     /// Cancel signal — send `true` to abort the current turn.
     pub cancel_rx: tokio::sync::watch::Receiver<bool>,
+}
+
+impl<'a> PromptRequest<'a> {
+    /// Extract the latest user message text from the conversation history.
+    pub fn last_user_message(&self) -> &str {
+        self.messages
+            .iter()
+            .rev()
+            .find(|m| m.role == "user")
+            .map(|m| m.content.as_str())
+            .unwrap_or_default()
+    }
 }
 
 /// A transport handles communication with an AI agent.
@@ -78,8 +90,26 @@ pub enum TransportConfig {
         #[serde(default)]
         base_args: Vec<String>,
     },
-    /// OpenAI-compatible HTTP API with SSE streaming.
+    /// OpenAI-compatible HTTP API with SSE streaming (`/v1/chat/completions`).
     OpenAi {
+        /// Base URL (e.g. `https://api.openai.com/v1`).
+        base_url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        api_key: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+    },
+    /// Anthropic Messages API with SSE streaming (`/v1/messages`).
+    Anthropic {
+        /// Base URL (e.g. `https://api.anthropic.com/v1`).
+        base_url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        api_key: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+    },
+    /// OpenAI Responses API with SSE streaming (`/v1/responses`).
+    Responses {
         /// Base URL (e.g. `https://api.openai.com/v1`).
         base_url: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -122,6 +152,22 @@ pub async fn create(
             model,
         } => {
             let t = openai::OpenAiTransport::new(base_url, api_key, model);
+            Ok(Box::new(t))
+        }
+        TransportConfig::Anthropic {
+            base_url,
+            api_key,
+            model,
+        } => {
+            let t = anthropic::AnthropicTransport::new(base_url, api_key, model);
+            Ok(Box::new(t))
+        }
+        TransportConfig::Responses {
+            base_url,
+            api_key,
+            model,
+        } => {
+            let t = responses::ResponsesTransport::new(base_url, api_key, model);
             Ok(Box::new(t))
         }
     }

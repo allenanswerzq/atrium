@@ -214,14 +214,11 @@ impl AgentChatManager {
         session.turn_cancel = Some(cancel_tx);
 
         let transport = Arc::clone(&session.transport);
-        let model_id = session.model_id.clone();
         let messages = session.messages.clone();
         let event_tx = session.event_tx.clone();
 
         let req = PromptRequest {
-            prompt: &message,
             messages: &messages,
-            model_id: model_id.as_deref(),
             event_tx: &event_tx,
             cancel_rx,
         };

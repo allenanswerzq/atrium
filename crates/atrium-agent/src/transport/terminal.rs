@@ -34,7 +34,7 @@ impl Transport for TerminalTransport {
     async fn prompt(&self, req: PromptRequest<'_>) -> Result<()> {
         let mut args = self.base_args.clone();
         args.push("-p".to_owned());
-        args.push(req.prompt.to_owned());
+        args.push(req.last_user_message().to_owned());
 
         tracing::info!(
             program = %self.program,

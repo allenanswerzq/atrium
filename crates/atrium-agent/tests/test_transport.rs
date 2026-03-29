@@ -8,7 +8,7 @@ use tokio::sync::broadcast;
 
 use atrium_agent::session::AgentChatManager;
 use atrium_agent::transport::TransportConfig;
-use atrium_agent::types::{AgentChatEvent, AgentChatStatus};
+use atrium_agent::types::{AgentChatEvent, AgentChatStatus, ChatMessage};
 use atrium_agent::{AgentKind};
 use atrium_executor::TaskManager;
 
@@ -162,6 +162,16 @@ fn config_serde_roundtrip() {
             api_key: Some("sk-test".into()),
             model: Some("gpt-4".into()),
         },
+        TransportConfig::Anthropic {
+            base_url: "https://api.anthropic.com/v1".into(),
+            api_key: Some("sk-ant-test".into()),
+            model: Some("claude-sonnet-4".into()),
+        },
+        TransportConfig::Responses {
+            base_url: "https://api.openai.com/v1".into(),
+            api_key: Some("sk-test".into()),
+            model: Some("gpt-4.1".into()),
+        },
     ] {
         let json = serde_json::to_string(&cfg).unwrap();
         let _: TransportConfig = serde_json::from_str(&json).unwrap();
@@ -283,13 +293,20 @@ async fn copilot_acp_100_sessions() {
     for (i, t) in transports.into_iter().enumerate() {
         handles.push(tokio::spawn(async move {
             let msg = format!("Reply with exactly: BATCH_{i}");
+            let messages = [ChatMessage {
+                role: "user".to_owned(),
+                content: msg,
+                tool_calls: Vec::new(),
+                input_tokens: 0,
+                output_tokens: 0,
+                model_id: None,
+                transport_label: None,
+            }];
             let (event_tx, mut event_rx) = broadcast::channel::<AgentChatEvent>(256);
             let (_cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
 
             let req = PromptRequest {
-                prompt: &msg,
-                messages: &[],
-                model_id: None,
+                messages: &messages,
                 event_tx: &event_tx,
                 cancel_rx,
             };
