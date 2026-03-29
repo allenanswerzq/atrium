@@ -1,6 +1,6 @@
 //! Center panel — tab bar and content dispatch (terminal, diff, file view, logs).
 
-use gpui::{div, prelude::*, px, rgb, Div};
+use gpui::{Div, div, prelude::*, px, rgb};
 
 use atrium_core::theme::ThemePalette;
 

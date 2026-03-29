@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 
 use atrium_error::Result;
 use parking_lot::Mutex;
-use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 //  Our GUI App                          Shell process (cmd.exe)
 //  ┌─────────┐                          ┌──────────┐
@@ -46,13 +46,12 @@ impl TerminalPty {
     ) -> Result<(Self, Box<dyn Read + Send>)> {
         let pty_system = native_pty_system();
 
-        let pair = pty_system
-            .openpty(PtySize {
-                rows,
-                cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })?;
+        let pair = pty_system.openpty(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })?;
 
         let mut cmd = CommandBuilder::new(shell);
         cmd.cwd(cwd);
@@ -125,12 +124,7 @@ mod tests {
 
     #[test]
     fn spawn_invalid_shell_returns_error() {
-        let result = TerminalPty::spawn(
-            "nonexistent_shell_binary_xyz",
-            &test_cwd(),
-            80,
-            24,
-        );
+        let result = TerminalPty::spawn("nonexistent_shell_binary_xyz", &test_cwd(), 80, 24);
         assert!(result.is_err());
     }
 

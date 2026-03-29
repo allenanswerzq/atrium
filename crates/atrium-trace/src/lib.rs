@@ -34,9 +34,6 @@ pub fn init_with_default(default_filter: &str) {
 
     tracing_subscriber::registry()
         .with(fmt::layer())
-        .with(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new(default_filter)),
-        )
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter)))
         .init();
 }

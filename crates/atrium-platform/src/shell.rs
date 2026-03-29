@@ -26,11 +26,7 @@ impl Shell {
     /// Returns the shell executable path.
     pub fn path(&self) -> &PathBuf {
         match self {
-            Self::Bash(p)
-            | Self::Zsh(p)
-            | Self::Fish(p)
-            | Self::PowerShell(p)
-            | Self::Cmd(p) => p,
+            Self::Bash(p) | Self::Zsh(p) | Self::Fish(p) | Self::PowerShell(p) | Self::Cmd(p) => p,
         }
     }
 

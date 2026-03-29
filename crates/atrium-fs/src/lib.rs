@@ -15,7 +15,7 @@ use std::{
 };
 
 use atrium_error::{Error, ErrorKind, Result};
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 
 /// Creates an error from an I/O error with path context.
 pub fn io_error(source: io::Error, operation: &'static str, path: &Path) -> Error {

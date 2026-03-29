@@ -5,6 +5,7 @@
 
 use std::path::PathBuf;
 
+use atrium_error::{Error, ErrorKind, Result};
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 
@@ -20,13 +21,17 @@ pub struct TerminalTransport {
 
 impl TerminalTransport {
     pub fn new(program: String, base_args: Vec<String>, workspace_path: PathBuf) -> Self {
-        Self { program, base_args, workspace_path }
+        Self {
+            program,
+            base_args,
+            workspace_path,
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl Transport for TerminalTransport {
-    async fn prompt(&self, req: PromptRequest<'_>) -> Result<(), String> {
+    async fn prompt(&self, req: PromptRequest<'_>) -> Result<()> {
         let mut args = self.base_args.clone();
         args.push("-p".to_owned());
         args.push(req.prompt.to_owned());
@@ -45,9 +50,18 @@ impl Transport for TerminalTransport {
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
-            .map_err(|e| format!("failed to spawn `{}`: {e}", self.program))?;
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::Io,
+                    format!("failed to spawn `{}`: {e}", self.program),
+                )
+                .set_source(e)
+            })?;
 
-        let stdout = child.stdout.take().ok_or("no stdout")?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| Error::new(ErrorKind::Io, "no stdout"))?;
         let mut lines = tokio::io::BufReader::new(stdout).lines();
         let mut cancel_rx = req.cancel_rx;
 
@@ -57,7 +71,7 @@ impl Transport for TerminalTransport {
                 _ = cancel_rx.changed() => {
                     if *cancel_rx.borrow() {
                         let _ = child.kill().await;
-                        return Err("turn cancelled".to_owned());
+                        return Err(Error::new(ErrorKind::Cancelled, "turn cancelled"));
                     }
                 }
                 line_result = lines.next_line() => {
@@ -81,15 +95,24 @@ impl Transport for TerminalTransport {
         }
 
         let stderr_text = read_stderr(child.stderr.take()).await;
-        let status = child.wait().await.map_err(|e| format!("wait error: {e}"))?;
+        let status = child
+            .wait()
+            .await
+            .map_err(|e| Error::new(ErrorKind::Io, format!("wait error: {e}")).set_source(e))?;
         if !status.success() {
             let code = status.code().unwrap_or(-1);
             let detail = if stderr_text.is_empty() {
                 format!("`{}` exited with code {code}", self.program)
             } else {
-                format!("`{}` exited with code {code}: {}", self.program, stderr_text.trim())
+                format!(
+                    "`{}` exited with code {code}: {}",
+                    self.program,
+                    stderr_text.trim()
+                )
             };
-            return Err(detail);
+            return Err(Error::new(ErrorKind::Unexpected, detail)
+                .with_context("program", &self.program)
+                .with_context("exit_code", code.to_string()));
         }
         Ok(())
     }

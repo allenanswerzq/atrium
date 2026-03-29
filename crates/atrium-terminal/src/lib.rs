@@ -18,7 +18,7 @@ pub mod types;
 pub use emulator::TerminalEmulator;
 pub use pty::TerminalPty;
 pub use session::{
-    JsonTerminalSessionStore, LocalTerminalService, TerminalRuntime,
-    TerminalService, TerminalSession, TerminalSessionStore, terminal_escape_bytes,
+    JsonTerminalSessionStore, LocalTerminalService, TerminalRuntime, TerminalService,
+    TerminalSession, TerminalSessionStore, terminal_escape_bytes,
 };
 pub use types::*;

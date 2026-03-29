@@ -1,6 +1,6 @@
 //! Sidebar — left pane with repository groups and worktree rows.
 
-use gpui::{div, prelude::*, px, rgb, Div};
+use gpui::{Div, div, prelude::*, px, rgb};
 
 use atrium_core::theme::ThemePalette;
 

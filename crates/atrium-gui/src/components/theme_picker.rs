@@ -1,6 +1,6 @@
 //! Theme selection overlay.
 
-use gpui::{div, prelude::*, px, rgb, Div};
+use gpui::{Div, div, prelude::*, px, rgb};
 
 use atrium_core::theme::{ThemeKind, ThemePalette};
 
@@ -20,10 +20,7 @@ impl ThemePicker {
     // └───────────────────────────────────────────────┘
     /// Render the theme picker as a modal.
     pub fn render(palette: &ThemePalette, current: ThemeKind) -> Div {
-        let mut grid = div()
-            .flex()
-            .flex_col()
-            .gap(px(4.0));
+        let mut grid = div().flex().flex_col().gap(px(4.0));
 
         for kind in ThemeKind::ALL {
             let is_active = *kind == current;

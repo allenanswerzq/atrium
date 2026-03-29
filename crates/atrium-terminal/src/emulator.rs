@@ -10,8 +10,8 @@
 //! ```
 
 use crate::types::{
-    TerminalCursor, TerminalModes, TerminalStyledCell, TerminalStyledLine, TerminalStyledRun,
-    DEFAULT_BG, DEFAULT_FG,
+    DEFAULT_BG, DEFAULT_FG, TerminalCursor, TerminalModes, TerminalStyledCell, TerminalStyledLine,
+    TerminalStyledRun,
 };
 
 /// Terminal emulator backed by `vt100`.
@@ -86,16 +86,18 @@ impl TerminalEmulator {
                     Some(c) => (color_to_u32(c.fgcolor()), color_to_u32(c.bgcolor())),
                     None => (DEFAULT_FG, DEFAULT_BG),
                 };
-                let text = cell
-                    .map(|c| c.contents())
-                    .unwrap_or_default();
+                let text = cell.map(|c| c.contents()).unwrap_or_default();
                 // Skip trailing empty cells
                 if text.is_empty() && col > 0 {
                     continue;
                 }
                 cells.push(TerminalStyledCell {
                     column: col as usize,
-                    text: if text.is_empty() { " ".to_owned() } else { text },
+                    text: if text.is_empty() {
+                        " ".to_owned()
+                    } else {
+                        text
+                    },
                     fg,
                     bg,
                 });
@@ -177,8 +179,8 @@ fn color_to_u32(color: vt100::Color) -> u32 {
 fn ansi_index_to_rgb(idx: u8) -> u32 {
     // Standard 16 ANSI colors
     const ANSI_16: [u32; 16] = [
-        0x000000, 0xcd0000, 0x00cd00, 0xcdcd00, 0x0000ee, 0xcd00cd, 0x00cdcd, 0xe5e5e5,
-        0x7f7f7f, 0xff0000, 0x00ff00, 0xffff00, 0x5c5cff, 0xff00ff, 0x00ffff, 0xffffff,
+        0x000000, 0xcd0000, 0x00cd00, 0xcdcd00, 0x0000ee, 0xcd00cd, 0x00cdcd, 0xe5e5e5, 0x7f7f7f,
+        0xff0000, 0x00ff00, 0xffff00, 0x5c5cff, 0xff00ff, 0x00ffff, 0xffffff,
     ];
 
     match idx {
@@ -262,8 +264,8 @@ mod tests {
 
     #[test]
     fn color_conversion() {
-        assert_eq!(ansi_index_to_rgb(0), 0x000000);  // black
-        assert_eq!(ansi_index_to_rgb(1), 0xcd0000);  // red
+        assert_eq!(ansi_index_to_rgb(0), 0x000000); // black
+        assert_eq!(ansi_index_to_rgb(1), 0xcd0000); // red
         assert_eq!(ansi_index_to_rgb(15), 0xffffff); // white
         // 256-color index 232 = dark gray
         assert_eq!(ansi_index_to_rgb(232), 0x080808);

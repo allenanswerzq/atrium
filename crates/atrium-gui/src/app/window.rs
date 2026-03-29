@@ -3,15 +3,12 @@
 //! Thin shell that owns components and delegates rendering.
 //! Terminal logic lives in `atrium-terminal`; this module wires it to GPUI.
 
-use gpui::{
-    Context, FocusHandle, KeyDownEvent, Render, Window,
-    div, prelude::*, px, rgb,
-};
+use gpui::{Context, FocusHandle, KeyDownEvent, Render, Window, div, prelude::*, px, rgb};
 
-use atrium_core::theme::ThemePalette;
-use atrium_terminal::{TerminalSession, terminal_escape_bytes};
 use crate::terminal::rendering;
 use crate::theme::ThemeState;
+use atrium_core::theme::ThemePalette;
+use atrium_terminal::{TerminalSession, terminal_escape_bytes};
 
 // ── State ───────────────────────────────────────────────────────────
 
@@ -28,13 +25,13 @@ impl AtriumWindow {
     pub fn new(cx: &mut Context<Self>) -> Self {
         // Spawn a default terminal session
         let shell = atrium_core::terminal::default_shell();
-        let cwd = std::env::current_dir().unwrap_or_else(|_| {
-            std::path::PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" })
-        });
+        let cwd = std::env::current_dir()
+            .unwrap_or_else(|_| std::path::PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" }));
         let id = atrium_core::id::TerminalSessionId::new("term-1".to_owned());
         let wid = atrium_core::id::WorkspaceId::new("default".to_owned());
 
-        let session = TerminalSession::spawn_standalone(id, wid, cwd, &shell, "Terminal 1", 120, 40).ok();
+        let session =
+            TerminalSession::spawn_standalone(id, wid, cwd, &shell, "Terminal 1", 120, 40).ok();
 
         Self {
             theme: ThemeState::default(),
@@ -55,7 +52,9 @@ impl AtriumWindow {
 impl AtriumWindow {
     fn ensure_poller(&mut self, cx: &mut Context<Self>) {
         // Only start once
-        if self.poller_started { return; }
+        if self.poller_started {
+            return;
+        }
         self.poller_started = true;
 
         // GPUI foreground task
@@ -64,14 +63,16 @@ impl AtriumWindow {
                 // Sleep on a background thread (never blocks the UI)
                 cx.background_spawn(async {
                     std::thread::sleep(std::time::Duration::from_millis(100));
-                }).await;
+                })
+                .await;
 
                 // Back on main thread: tell GPUI to re-render
                 if this.update(cx, |_, cx| cx.notify()).is_err() {
-                    break;  // Window closed, stop polling
+                    break; // Window closed, stop polling
                 }
             }
-        }).detach();  // Fire and forget — runs until window closes
+        })
+        .detach(); // Fire and forget — runs until window closes
     }
 }
 
@@ -92,9 +93,7 @@ impl AtriumWindow {
         let key = event.keystroke.key.as_str();
         let ctrl = event.keystroke.modifiers.control;
         let alt = event.keystroke.modifiers.alt;
-        let modes = session.runtime()
-            .map(|r| r.modes())
-            .unwrap_or_default();
+        let modes = session.runtime().map(|r| r.modes()).unwrap_or_default();
 
         if let Some(bytes) = terminal_escape_bytes(key, ctrl, alt, modes) {
             let _ = session.write(&bytes);
@@ -143,7 +142,8 @@ impl Render for AtriumWindow {
 
 impl AtriumWindow {
     fn render_tab_bar(&self, palette: &ThemePalette) -> gpui::Div {
-        let label = self.session
+        let label = self
+            .session
             .as_ref()
             .map(|s| s.title().to_owned())
             .unwrap_or_else(|| "No terminal".to_owned());

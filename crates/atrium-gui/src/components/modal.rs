@@ -1,6 +1,6 @@
 //! Modal backdrop and common modal patterns.
 
-use gpui::{div, prelude::*, px, rgb, rgba, Div};
+use gpui::{Div, div, prelude::*, px, rgb, rgba};
 
 use atrium_core::theme::ThemePalette;
 

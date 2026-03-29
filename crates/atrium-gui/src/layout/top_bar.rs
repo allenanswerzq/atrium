@@ -1,6 +1,6 @@
 //! Top bar — titlebar with navigation, repo/branch label, action icons.
 
-use gpui::{div, prelude::*, px, rgb, Div};
+use gpui::{Div, div, prelude::*, px, rgb};
 
 use atrium_core::theme::ThemePalette;
 
@@ -36,13 +36,13 @@ impl TopBar {
                         div()
                             .text_color(rgb(palette.text_muted))
                             .text_size(px(13.0))
-                            .child("\u{25C0}")
+                            .child("\u{25C0}"),
                     )
                     .child(
                         div()
                             .text_color(rgb(palette.text_muted))
                             .text_size(px(13.0))
-                            .child("\u{25B6}")
+                            .child("\u{25B6}"),
                     ),
             )
             .child(
@@ -54,16 +54,12 @@ impl TopBar {
             )
             .child(
                 // Right section: placeholder for action icons
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(8.0))
-                    .child(
-                        div()
-                            .text_color(rgb(palette.text_muted))
-                            .text_size(px(12.0))
-                            .child("\u{2699}")
-                    ),
+                div().flex().items_center().gap(px(8.0)).child(
+                    div()
+                        .text_color(rgb(palette.text_muted))
+                        .text_size(px(12.0))
+                        .child("\u{2699}"),
+                ),
             )
     }
 }

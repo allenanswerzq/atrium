@@ -3,11 +3,11 @@
 //! Pure functions that take terminal state and produce GPUI divs.
 //! No mutations, no I/O — just reads styled lines and builds UI.
 
-use gpui::{div, prelude::*, px, rgb, Div};
+use gpui::{Div, div, prelude::*, px, rgb};
 
 use atrium_core::theme::ThemePalette;
-use atrium_terminal::{TerminalSession, TerminalStyledLine};
 use atrium_terminal::types::DEFAULT_FG;
+use atrium_terminal::{TerminalSession, TerminalStyledLine};
 
 pub const CELL_WIDTH: f32 = 9.0;
 pub const LINE_HEIGHT: f32 = 19.0;
@@ -62,11 +62,7 @@ fn render_styled_line(
     is_cursor_row: bool,
     palette: &ThemePalette,
 ) -> Div {
-    let mut row = div()
-        .h(px(LINE_HEIGHT))
-        .w_full()
-        .flex()
-        .flex_row();
+    let mut row = div().h(px(LINE_HEIGHT)).w_full().flex().flex_row();
 
     if is_cursor_row {
         row = row.bg(rgb(palette.border));

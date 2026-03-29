@@ -5,15 +5,15 @@
 //! in-flight work.
 
 use futures_util::{
-    future::{FusedFuture, Shared},
     FutureExt,
+    future::{FusedFuture, Shared},
 };
 use std::{
     future::Future,
     pin::Pin,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     task::{Context, Poll, ready},
 };

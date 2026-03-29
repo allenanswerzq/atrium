@@ -36,27 +36,18 @@ impl From<String> for AgentSessionId {
 
 // ── Enums ───────────────────────────────────────────────────────────
 
-/// Runtime state of an AI coding agent.
+/// What the agent is doing within a turn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum AgentState {
+    /// Actively generating a response.
     Working,
+    /// Waiting for tool results or user input.
     Waiting,
 }
 
-/// Which AI agent provider a session belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum AgentProvider {
-    Claude,
-    Codex,
-    Copilot,
-    OpenCode,
-}
-
-/// Status of an agent chat session.
+/// Lifecycle status of an agent chat session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -95,14 +86,28 @@ fn is_zero(v: &u64) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AgentChatEvent {
-    MessageChunk { content: String },
-    ThoughtChunk { content: String },
-    ToolCall { name: String, status: String },
+    MessageChunk {
+        content: String,
+    },
+    ThoughtChunk {
+        content: String,
+    },
+    ToolCall {
+        name: String,
+        status: String,
+    },
     TurnStarted,
     TurnCompleted,
-    UsageUpdate { input_tokens: u64, output_tokens: u64 },
-    Error { message: String },
-    SessionExited { exit_code: Option<i32> },
+    UsageUpdate {
+        input_tokens: u64,
+        output_tokens: u64,
+    },
+    Error {
+        message: String,
+    },
+    SessionExited {
+        exit_code: Option<i32>,
+    },
     Snapshot {
         messages: Vec<ChatMessage>,
         status: AgentChatStatus,
@@ -111,19 +116,12 @@ pub enum AgentChatEvent {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         transport_label: Option<String>,
     },
-    UserMessage { content: String },
-    StatusUpdate { message: String },
-}
-
-// ── Activity ────────────────────────────────────────────────────────
-
-/// A record of agent activity for a worktree.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentActivityRecord {
-    pub session_id: String,
-    pub cwd: String,
-    pub state: AgentState,
-    pub updated_at_unix_ms: Option<u64>,
+    UserMessage {
+        content: String,
+    },
+    StatusUpdate {
+        message: String,
+    },
 }
 
 // ── Persistence ─────────────────────────────────────────────────────

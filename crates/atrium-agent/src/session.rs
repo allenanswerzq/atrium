@@ -4,13 +4,13 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use atrium_error::{Error, ErrorKind, Result};
 use tokio::sync::broadcast;
 
 use crate::kind::AgentKind;
 use crate::transport::{self, PromptRequest, Transport, TransportConfig};
 use crate::types::{
-    AgentChatEvent, AgentChatStatus, AgentSessionId,
-    AgentSessionSummary, ChatMessage,
+    AgentChatEvent, AgentChatStatus, AgentSessionId, AgentSessionSummary, ChatMessage,
 };
 
 // ── Session ─────────────────────────────────────────────────────────
@@ -50,8 +50,12 @@ impl AgentChatSession {
         }
         let text = std::mem::take(&mut self.pending_text);
         let tools = std::mem::take(&mut self.pending_tool_calls);
-        let turn_input = self.input_tokens.saturating_sub(self.turn_start_input_tokens);
-        let mut turn_output = self.output_tokens.saturating_sub(self.turn_start_output_tokens);
+        let turn_input = self
+            .input_tokens
+            .saturating_sub(self.turn_start_input_tokens);
+        let mut turn_output = self
+            .output_tokens
+            .saturating_sub(self.turn_start_output_tokens);
         if turn_output == 0 && !text.is_empty() {
             turn_output = (text.len() as u64).div_ceil(4);
         }
@@ -101,13 +105,36 @@ impl AgentChatManager {
         }
     }
 
+    fn get_session(&mut self, id: &AgentSessionId) -> Result<&mut AgentChatSession> {
+        self.sessions
+            .get_mut(id)
+            .ok_or_else(|| Error::new(ErrorKind::NotFound, format!("session not found: {id}")))
+    }
+
+    /// Create a new session using the agent's default ACP config.
     pub async fn create(
         &mut self,
         agent_kind: AgentKind,
         workspace_path: PathBuf,
         model_id: Option<String>,
+    ) -> Result<(AgentSessionId, broadcast::Receiver<AgentChatEvent>)> {
+        self.create_with_config(
+            agent_kind,
+            workspace_path,
+            model_id,
+            agent_kind.default_acp_config(),
+        )
+        .await
+    }
+
+    /// Create a new session with an explicit transport config override.
+    pub async fn create_with_config(
+        &mut self,
+        agent_kind: AgentKind,
+        workspace_path: PathBuf,
+        model_id: Option<String>,
         config: TransportConfig,
-    ) -> Result<(AgentSessionId, broadcast::Receiver<AgentChatEvent>), String> {
+    ) -> Result<(AgentSessionId, broadcast::Receiver<AgentChatEvent>)> {
         let id = self.next_id;
         self.next_id += 1;
         let session_id = AgentSessionId::new(format!("agent-chat-{id}"));
@@ -142,18 +169,46 @@ impl AgentChatManager {
         Ok((session_id, event_rx))
     }
 
-    pub fn send_message(&mut self, session_id: &AgentSessionId, message: String) -> Result<(), String> {
-        let session = self.sessions.get_mut(session_id)
-            .ok_or_else(|| format!("session not found: {session_id}"))?;
+    fn shutdown_transport(transport: Arc<dyn Transport>) {
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(async move {
+                transport.shutdown().await;
+            });
+            return;
+        }
+
+        std::thread::spawn(move || {
+            if let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+            {
+                runtime.block_on(async move {
+                    transport.shutdown().await;
+                });
+            }
+        });
+    }
+
+    pub fn send_message(&mut self, session_id: &AgentSessionId, message: String) -> Result<()> {
+        let session = self.get_session(session_id)?;
         if session.status == AgentChatStatus::Working {
-            return Err("agent is already processing".to_owned());
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "agent is already processing",
+            ));
         }
         session.messages.push(ChatMessage {
-            role: "user".to_owned(), content: message.clone(),
-            tool_calls: Vec::new(), input_tokens: 0, output_tokens: 0,
-            model_id: None, transport_label: None,
+            role: "user".to_owned(),
+            content: message.clone(),
+            tool_calls: Vec::new(),
+            input_tokens: 0,
+            output_tokens: 0,
+            model_id: None,
+            transport_label: None,
         });
-        let _ = session.event_tx.send(AgentChatEvent::UserMessage { content: message.clone() });
+        let _ = session.event_tx.send(AgentChatEvent::UserMessage {
+            content: message.clone(),
+        });
         session.status = AgentChatStatus::Working;
         session.turn_start_input_tokens = session.input_tokens;
         session.turn_start_output_tokens = session.output_tokens;
@@ -182,8 +237,10 @@ impl AgentChatManager {
                 Ok(()) => {
                     let _ = event_tx.send(AgentChatEvent::TurnCompleted);
                 }
-                Err(msg) => {
-                    let _ = event_tx.send(AgentChatEvent::Error { message: msg });
+                Err(e) => {
+                    let _ = event_tx.send(AgentChatEvent::Error {
+                        message: e.to_string(),
+                    });
                     let _ = event_tx.send(AgentChatEvent::TurnCompleted);
                 }
             }
@@ -192,23 +249,24 @@ impl AgentChatManager {
         Ok(())
     }
 
-    pub fn cancel(&mut self, session_id: &AgentSessionId) -> Result<(), String> {
-        let session = self.sessions.get_mut(session_id)
-            .ok_or_else(|| format!("session not found: {session_id}"))?;
+    pub fn cancel(&mut self, session_id: &AgentSessionId) -> Result<()> {
+        let session = self.get_session(session_id)?;
         if let Some(cancel_tx) = session.turn_cancel.take() {
             let _ = cancel_tx.send(true);
         }
         Ok(())
     }
 
-    pub fn kill(&mut self, session_id: &AgentSessionId) -> Result<(), String> {
-        let session = self.sessions.get_mut(session_id)
-            .ok_or_else(|| format!("session not found: {session_id}"))?;
+    pub fn kill(&mut self, session_id: &AgentSessionId) -> Result<()> {
+        let session = self.get_session(session_id)?;
         if let Some(cancel_tx) = session.turn_cancel.take() {
             let _ = cancel_tx.send(true);
         }
+        Self::shutdown_transport(Arc::clone(&session.transport));
         session.status = AgentChatStatus::Exited;
-        let _ = session.event_tx.send(AgentChatEvent::SessionExited { exit_code: None });
+        let _ = session
+            .event_tx
+            .send(AgentChatEvent::SessionExited { exit_code: None });
         Ok(())
     }
 
@@ -217,19 +275,23 @@ impl AgentChatManager {
             if let Some(cancel_tx) = session.turn_cancel.take() {
                 let _ = cancel_tx.send(true);
             }
+            Self::shutdown_transport(Arc::clone(&session.transport));
         }
     }
 
     pub fn list(&self) -> Vec<AgentSessionSummary> {
-        self.sessions.values().map(|s| AgentSessionSummary {
-            id: s.id.to_string(),
-            agent_kind: s.agent_kind.key().to_owned(),
-            workspace_path: s.workspace_path.display().to_string(),
-            status: s.status,
-            input_tokens: s.input_tokens,
-            output_tokens: s.output_tokens,
-            transport_label: s.transport_label(),
-        }).collect()
+        self.sessions
+            .values()
+            .map(|s| AgentSessionSummary {
+                id: s.id.to_string(),
+                agent_kind: s.agent_kind.key().to_owned(),
+                workspace_path: s.workspace_path.display().to_string(),
+                status: s.status,
+                input_tokens: s.input_tokens,
+                output_tokens: s.output_tokens,
+                transport_label: s.transport_label(),
+            })
+            .collect()
     }
 
     pub fn session(&self, id: &AgentSessionId) -> Option<&AgentChatSession> {

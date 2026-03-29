@@ -13,8 +13,6 @@ use crate::emulator::TerminalEmulator;
 use crate::pty::TerminalPty;
 use crate::types::*;
 
-
-
 // ── Runtime ─────────────────────────────────────────────────────────
 
 /// The live PTY backend — owns the process, emulator, and reader task.
@@ -130,7 +128,9 @@ impl TerminalRuntime {
         // Check if any row has non-empty content
         let emu = self.emulator.lock();
         let lines = emu.styled_lines();
-        lines.iter().any(|l| l.runs.iter().any(|r| r.text.trim() != ""))
+        lines
+            .iter()
+            .any(|l| l.runs.iter().any(|r| r.text.trim() != ""))
     }
 
     /// Get output as simple display lines (for compatibility).
@@ -206,12 +206,24 @@ impl TerminalSession {
 
     // ── Accessors ───────────────────────────────────────────────────
 
-    pub fn session_id(&self) -> &TerminalSessionId { &self.session_id }
-    pub fn title(&self) -> &str { &self.title }
-    pub fn shell(&self) -> &str { &self.shell }
-    pub fn cols(&self) -> u16 { self.cols }
-    pub fn rows(&self) -> u16 { self.rows }
-    pub fn runtime(&self) -> Option<&TerminalRuntime> { self.runtime.as_ref() }
+    pub fn session_id(&self) -> &TerminalSessionId {
+        &self.session_id
+    }
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+    pub fn shell(&self) -> &str {
+        &self.shell
+    }
+    pub fn cols(&self) -> u16 {
+        self.cols
+    }
+    pub fn rows(&self) -> u16 {
+        self.rows
+    }
+    pub fn runtime(&self) -> Option<&TerminalRuntime> {
+        self.runtime.as_ref()
+    }
 
     pub fn state(&self) -> TerminalState {
         self.runtime
@@ -229,10 +241,7 @@ impl TerminalSession {
     pub fn write(&self, data: &[u8]) -> Result<()> {
         self.runtime
             .as_ref()
-            .ok_or_else(|| Error::new(
-                ErrorKind::Unsupported,
-                "no runtime attached",
-            ))?
+            .ok_or_else(|| Error::new(ErrorKind::Unsupported, "no runtime attached"))?
             .write(data)
     }
 
@@ -339,7 +348,10 @@ pub struct LocalTerminalService {
 
 impl LocalTerminalService {
     pub fn new(executor: TaskExecutor) -> Self {
-        Self { executor, sessions: HashMap::new() }
+        Self {
+            executor,
+            sessions: HashMap::new(),
+        }
     }
 
     pub fn session(&self, id: &TerminalSessionId) -> Option<&TerminalSession> {
@@ -354,9 +366,14 @@ impl LocalTerminalService {
 impl TerminalService for LocalTerminalService {
     fn create(&mut self, req: TerminalCreateRequest) -> Result<TerminalSessionRecord> {
         let session = TerminalSession::spawn(
-            &self.executor, req.session_id.clone(), req.workspace_id,
-            req.cwd, &req.shell, req.title.as_deref().unwrap_or("Terminal"),
-            req.cols, req.rows,
+            &self.executor,
+            req.session_id.clone(),
+            req.workspace_id,
+            req.cwd,
+            &req.shell,
+            req.title.as_deref().unwrap_or("Terminal"),
+            req.cols,
+            req.rows,
         )?;
         let record = session.record();
         self.sessions.insert(req.session_id, session);
@@ -364,19 +381,23 @@ impl TerminalService for LocalTerminalService {
     }
 
     fn write(&self, req: TerminalWriteRequest) -> Result<()> {
-        self.sessions.get(&req.session_id)
+        self.sessions
+            .get(&req.session_id)
             .ok_or_else(|| Error::new(ErrorKind::NotFound, "session not found"))?
             .write(&req.bytes)
     }
 
     fn kill(&mut self, req: TerminalKillRequest) -> Result<()> {
-        self.sessions.remove(&req.session_id)
+        self.sessions
+            .remove(&req.session_id)
             .map(|_| ())
             .ok_or_else(|| Error::new(ErrorKind::NotFound, "session not found"))
     }
 
     fn snapshot(&self, session_id: &TerminalSessionId) -> Result<TerminalSnapshot> {
-        Ok(self.sessions.get(session_id)
+        Ok(self
+            .sessions
+            .get(session_id)
             .ok_or_else(|| Error::new(ErrorKind::NotFound, "session not found"))?
             .snapshot())
     }
@@ -407,7 +428,9 @@ impl JsonTerminalSessionStore {
 
 impl TerminalSessionStore for JsonTerminalSessionStore {
     fn load(&self) -> Result<Vec<TerminalSessionRecord>> {
-        if !self.path.exists() { return Ok(Vec::new()); }
+        if !self.path.exists() {
+            return Ok(Vec::new());
+        }
         atrium_fs::read_json(&self.path)
     }
 
@@ -419,8 +442,15 @@ impl TerminalSessionStore for JsonTerminalSessionStore {
 // ── Keys ────────────────────────────────────────────────────────────
 
 /// Convert a key name + modifiers to terminal escape bytes.
-pub fn terminal_escape_bytes(key: &str, ctrl: bool, alt: bool, _modes: TerminalModes) -> Option<Vec<u8>> {
-    if ctrl { return ctrl_byte(key); }
+pub fn terminal_escape_bytes(
+    key: &str,
+    ctrl: bool,
+    alt: bool,
+    _modes: TerminalModes,
+) -> Option<Vec<u8>> {
+    if ctrl {
+        return ctrl_byte(key);
+    }
     let seq: Option<&[u8]> = match key {
         "enter" | "return" => Some(b"\r"),
         "tab" => Some(b"\t"),
@@ -436,15 +466,23 @@ pub fn terminal_escape_bytes(key: &str, ctrl: bool, alt: bool, _modes: TerminalM
         "pageup" => Some(b"\x1b[5~"),
         "pagedown" => Some(b"\x1b[6~"),
         "insert" => Some(b"\x1b[2~"),
-        "f1" => Some(b"\x1bOP"), "f2" => Some(b"\x1bOQ"),
-        "f3" => Some(b"\x1bOR"), "f4" => Some(b"\x1bOS"),
-        "f5" => Some(b"\x1b[15~"), "f6" => Some(b"\x1b[17~"),
-        "f7" => Some(b"\x1b[18~"), "f8" => Some(b"\x1b[19~"),
-        "f9" => Some(b"\x1b[20~"), "f10" => Some(b"\x1b[21~"),
-        "f11" => Some(b"\x1b[23~"), "f12" => Some(b"\x1b[24~"),
+        "f1" => Some(b"\x1bOP"),
+        "f2" => Some(b"\x1bOQ"),
+        "f3" => Some(b"\x1bOR"),
+        "f4" => Some(b"\x1bOS"),
+        "f5" => Some(b"\x1b[15~"),
+        "f6" => Some(b"\x1b[17~"),
+        "f7" => Some(b"\x1b[18~"),
+        "f8" => Some(b"\x1b[19~"),
+        "f9" => Some(b"\x1b[20~"),
+        "f10" => Some(b"\x1b[21~"),
+        "f11" => Some(b"\x1b[23~"),
+        "f12" => Some(b"\x1b[24~"),
         _ => None,
     };
-    if let Some(bytes) = seq { return Some(bytes.to_vec()); }
+    if let Some(bytes) = seq {
+        return Some(bytes.to_vec());
+    }
     if alt && key.len() == 1 {
         let mut bytes = vec![0x1b];
         bytes.extend_from_slice(key.as_bytes());
@@ -458,9 +496,12 @@ fn ctrl_byte(key: &str) -> Option<Vec<u8>> {
     match ch {
         'a'..='z' => Some(vec![ch as u8 - b'a' + 1]),
         'A'..='Z' => Some(vec![ch as u8 - b'A' + 1]),
-        '@' => Some(vec![0x00]), '[' => Some(vec![0x1b]),
-        '\\' => Some(vec![0x1c]), ']' => Some(vec![0x1d]),
-        '^' => Some(vec![0x1e]), '_' => Some(vec![0x1f]),
+        '@' => Some(vec![0x00]),
+        '[' => Some(vec![0x1b]),
+        '\\' => Some(vec![0x1c]),
+        ']' => Some(vec![0x1d]),
+        '^' => Some(vec![0x1e]),
+        '_' => Some(vec![0x1f]),
         '?' => Some(vec![0x7f]),
         _ => None,
     }

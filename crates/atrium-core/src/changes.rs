@@ -2,8 +2,8 @@
 
 use atrium_error::{Error, ErrorKind, Result};
 use serde::{Deserialize, Serialize};
-use strum::{Display, IntoStaticStr};
 use std::path::{Path, PathBuf};
+use strum::{Display, IntoStaticStr};
 
 /// The kind of change detected for a file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Display, IntoStaticStr)]

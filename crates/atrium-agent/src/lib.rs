@@ -14,10 +14,8 @@ pub mod session;
 pub mod transport;
 pub mod types;
 
+pub use atrium_error::{Error, ErrorKind, Result};
 pub use kind::AgentKind;
 pub use session::{AgentChatManager, AgentChatSession};
 pub use transport::{Transport, TransportConfig};
-pub use types::{
-    AgentChatEvent, AgentChatStatus, AgentProvider,
-    AgentSessionId, AgentState, ChatMessage,
-};
+pub use types::{AgentChatEvent, AgentChatStatus, AgentSessionId, AgentState, ChatMessage};

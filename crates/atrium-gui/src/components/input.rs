@@ -1,6 +1,6 @@
 //! Text input widget.
 
-use gpui::{div, prelude::*, px, rgb, Div};
+use gpui::{Div, div, prelude::*, px, rgb};
 
 use atrium_core::theme::ThemePalette;
 

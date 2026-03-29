@@ -8,12 +8,12 @@
 //! - Shell detection and command wrapping
 //! - Line ending conventions
 
+mod keyboard;
 mod os;
 mod paths;
 mod shell;
-mod keyboard;
 
+pub use keyboard::{primary_keystroke, primary_modifier, primary_shift_keystroke};
 pub use os::{Arch, Os, Platform};
 pub use paths::PlatformPaths;
 pub use shell::Shell;
-pub use keyboard::{primary_modifier, primary_keystroke, primary_shift_keystroke};

@@ -1,6 +1,6 @@
 //! Status bar — bottom bar with connection status, memory usage, etc.
 
-use gpui::{div, prelude::*, px, rgb, Div};
+use gpui::{Div, div, prelude::*, px, rgb};
 
 use atrium_core::theme::ThemePalette;
 use atrium_platform::{Os, Platform};
@@ -42,7 +42,8 @@ impl StatusBar {
                     .text_color(rgb(palette.text_muted))
                     .child(platform_label)
                     .child("\u{00B7}")
-                    .child(format!("{} terminal{}",
+                    .child(format!(
+                        "{} terminal{}",
                         terminal_count,
                         if terminal_count == 1 { "" } else { "s" }
                     )),

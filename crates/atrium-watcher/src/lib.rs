@@ -150,8 +150,7 @@ mod tests {
         let task_manager = TaskManager::current();
         let executor = task_manager.executor();
         let (tx, _rx) = mpsc::unbounded_channel();
-        let result =
-            FileWatcher::start(executor, vec![PathBuf::from("/nonexistent/file.ini")], tx);
+        let result = FileWatcher::start(executor, vec![PathBuf::from("/nonexistent/file.ini")], tx);
         assert!(!result);
     }
 

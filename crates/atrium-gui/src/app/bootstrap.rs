@@ -1,6 +1,6 @@
 //! Application bootstrap — window creation and GUI lifecycle.
 
-use gpui::{Bounds, WindowBounds, WindowOptions, size, px, prelude::*};
+use gpui::{Bounds, WindowBounds, WindowOptions, prelude::*, px, size};
 
 use super::keybindings;
 use super::window::AtriumWindow;
@@ -28,9 +28,7 @@ impl AtriumApp {
 
     /// Create an AtriumApp from a GPUI Application.
     pub fn new(application: gpui::Application) -> Self {
-        Self {
-            inner: application,
-        }
+        Self { inner: application }
     }
 
     /// Run the event loop — installs keybindings, opens the window, blocks until close.

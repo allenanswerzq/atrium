@@ -5,8 +5,8 @@
 
 use crate::id::{TerminalSessionId, WorkspaceId};
 use serde::{Deserialize, Serialize};
-use strum::{Display, IntoStaticStr};
 use std::path::PathBuf;
+use strum::{Display, IntoStaticStr};
 
 // ── Requests ────────────────────────────────────────────────────────
 
@@ -58,7 +58,9 @@ pub enum TerminalSignal {
 
 // ── State ───────────────────────────────────────────────────────────
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Display, IntoStaticStr)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Display, IntoStaticStr,
+)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TerminalSessionState {
@@ -113,7 +115,11 @@ pub trait TerminalDaemon {
     fn resize(&mut self, request: ResizeRequest) -> atrium_error::Result<()>;
     fn detach(&mut self, request: DetachRequest) -> atrium_error::Result<()>;
     fn kill(&mut self, request: KillRequest) -> atrium_error::Result<()>;
-    fn snapshot(&self, session_id: &TerminalSessionId, max_lines: usize) -> atrium_error::Result<TerminalSnapshot>;
+    fn snapshot(
+        &self,
+        session_id: &TerminalSessionId,
+        max_lines: usize,
+    ) -> atrium_error::Result<TerminalSnapshot>;
     fn list_sessions(&self) -> Vec<DaemonSessionRecord>;
 }
 

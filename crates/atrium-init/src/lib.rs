@@ -75,8 +75,7 @@ impl EarlyInitialized {
     ///
     /// Can only be called once. Returns `None` if already taken.
     pub fn take_application(&mut self) -> Option<gpui::Application> {
-        Arc::get_mut(&mut self.inner)
-            .and_then(|inner| inner.application.take())
+        Arc::get_mut(&mut self.inner).and_then(|inner| inner.application.take())
     }
 
     /// Finalize into a fully initialized runtime.

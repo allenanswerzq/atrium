@@ -1,5 +1,7 @@
 # Atrium workspace justfile
 
+set shell := ["powershell", "-NoProfile", "-Command"]
+
 root := justfile_directory()
 
 # Format all code

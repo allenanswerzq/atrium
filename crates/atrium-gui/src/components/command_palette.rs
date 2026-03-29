@@ -1,6 +1,6 @@
 //! Fuzzy-searchable command palette.
 
-use gpui::{div, prelude::*, px, rgb, Div};
+use gpui::{Div, div, prelude::*, px, rgb};
 
 use atrium_core::theme::ThemePalette;
 
@@ -19,14 +19,11 @@ impl CommandPalette {
     // └───────────────────────────────────────────────┘
     /// Render the command palette overlay.
     pub fn render(palette: &ThemePalette, query: &str, items: &[&str]) -> Div {
-        let mut list = div()
-            .flex()
-            .flex_col()
-            .max_h(px(300.0));
+        let mut list = div().flex().flex_col().max_h(px(300.0));
 
         for &item in items {
-            let matches_query = query.is_empty()
-                || item.to_lowercase().contains(&query.to_lowercase());
+            let matches_query =
+                query.is_empty() || item.to_lowercase().contains(&query.to_lowercase());
             if matches_query {
                 list = list.child(
                     div()
@@ -49,9 +46,11 @@ impl CommandPalette {
                 .flex()
                 .flex_col()
                 .gap(px(8.0))
-                .child(
-                    super::input::TextInput::render(query, "Type a command...", palette),
-                )
+                .child(super::input::TextInput::render(
+                    query,
+                    "Type a command...",
+                    palette,
+                ))
                 .child(list),
         )
     }

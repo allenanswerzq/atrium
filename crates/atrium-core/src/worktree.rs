@@ -100,19 +100,20 @@ fn open_git2_repo(path: &Path) -> Result<git2::Repository> {
 }
 
 fn main_worktree_path(repo: &git2::Repository) -> Result<PathBuf> {
-    repo.workdir()
-        .map(|p| p.to_path_buf())
-        .ok_or_else(|| {
-            Error::new(ErrorKind::Git, "repository has no working directory")
-                .with_operation("repo_root")
-        })
+    repo.workdir().map(|p| p.to_path_buf()).ok_or_else(|| {
+        Error::new(ErrorKind::Git, "repository has no working directory")
+            .with_operation("repo_root")
+    })
 }
 
 fn build_main_worktree(repo: &git2::Repository, repo_path: &Path) -> Worktree {
     let head = repo.head().ok();
     Worktree {
         path: repo_path.to_path_buf(),
-        head: head.as_ref().and_then(|h| h.target()).map(|oid| oid.to_string()),
+        head: head
+            .as_ref()
+            .and_then(|h| h.target())
+            .map(|oid| oid.to_string()),
         branch: head.as_ref().and_then(|h| h.shorthand().map(String::from)),
         is_bare: repo.is_bare(),
         is_detached: repo.head_detached().unwrap_or(false),
@@ -133,7 +134,10 @@ fn build_linked_worktree(repo: &git2::Repository, name: &str) -> Option<Worktree
 
     Some(Worktree {
         path: wt.path().to_path_buf(),
-        head: head.as_ref().and_then(|h| h.target()).map(|oid| oid.to_string()),
+        head: head
+            .as_ref()
+            .and_then(|h| h.target())
+            .map(|oid| oid.to_string()),
         branch: head.as_ref().and_then(|h| h.shorthand().map(String::from)),
         is_bare: false,
         is_detached: wt_repo.head_detached().unwrap_or(false),
@@ -143,8 +147,14 @@ fn build_linked_worktree(repo: &git2::Repository, name: &str) -> Option<Worktree
 
 /// Compare two paths ignoring trailing slashes and case on Windows.
 pub fn paths_equivalent(left: &Path, right: &Path) -> bool {
-    let left = left.to_string_lossy().trim_end_matches(['/', '\\']).to_owned();
-    let right = right.to_string_lossy().trim_end_matches(['/', '\\']).to_owned();
+    let left = left
+        .to_string_lossy()
+        .trim_end_matches(['/', '\\'])
+        .to_owned();
+    let right = right
+        .to_string_lossy()
+        .trim_end_matches(['/', '\\'])
+        .to_owned();
     if cfg!(windows) {
         left.eq_ignore_ascii_case(&right)
     } else {

@@ -32,12 +32,20 @@ impl IoStats {
     /// Throughput in bytes per second.
     pub fn throughput_bps(&self) -> f64 {
         let secs = self.duration.as_secs_f64();
-        if secs > 0.0 { self.bytes as f64 / secs } else { 0.0 }
+        if secs > 0.0 {
+            self.bytes as f64 / secs
+        } else {
+            0.0
+        }
     }
 
     /// Average operation size in bytes.
     pub fn avg_op_size(&self) -> f64 {
-        if self.ops > 0 { self.bytes as f64 / self.ops as f64 } else { 0.0 }
+        if self.ops > 0 {
+            self.bytes as f64 / self.ops as f64
+        } else {
+            0.0
+        }
     }
 
     pub fn has_errors(&self) -> bool {

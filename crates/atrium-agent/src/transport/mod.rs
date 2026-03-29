@@ -15,6 +15,7 @@ pub mod terminal;
 
 use std::path::PathBuf;
 
+use atrium_error::{Error, ErrorKind, Result};
 use tokio::sync::broadcast;
 
 use crate::types::{AgentChatEvent, ChatMessage};
@@ -45,7 +46,7 @@ pub trait Transport: Send + Sync {
     ///
     /// Blocks until the turn completes or is cancelled. The caller sends
     /// `TurnCompleted` / `Error` events after this returns.
-    async fn prompt(&self, req: PromptRequest<'_>) -> Result<(), String>;
+    async fn prompt(&self, req: PromptRequest<'_>) -> Result<()>;
 
     /// Shut down the transport, killing any background processes.
     async fn shutdown(&self);
@@ -103,7 +104,7 @@ impl Default for TransportConfig {
 pub async fn create(
     config: TransportConfig,
     workspace_path: PathBuf,
-) -> Result<Box<dyn Transport>, String> {
+) -> Result<Box<dyn Transport>> {
     match config {
         TransportConfig::Acp { program, args } => {
             let t = acp::AcpTransport::spawn(program, args, workspace_path)?;
@@ -153,7 +154,7 @@ pub(crate) async fn consume_sse_stream(
     response: reqwest::Response,
     cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
     mut on_data: impl FnMut(&str),
-) -> Result<(), String> {
+) -> Result<()> {
     use futures::StreamExt;
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
@@ -163,12 +164,14 @@ pub(crate) async fn consume_sse_stream(
             biased;
             _ = cancel_rx.changed() => {
                 if *cancel_rx.borrow() {
-                    return Err("turn cancelled".to_owned());
+                    return Err(Error::new(ErrorKind::Cancelled, "turn cancelled"));
                 }
             }
             chunk = stream.next() => {
                 let Some(chunk_result) = chunk else { break };
-                let bytes = chunk_result.map_err(|e| format!("stream error: {e}"))?;
+                let bytes = chunk_result.map_err(|e| {
+                    Error::new(ErrorKind::Network, format!("stream error: {e}")).set_source(e)
+                })?;
                 buffer.push_str(&String::from_utf8_lossy(&bytes));
 
                 while let Some(pos) = buffer.find('\n') {

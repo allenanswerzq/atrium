@@ -8,10 +8,7 @@
 
 pub mod env_var;
 
-use std::{
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use atrium_error::{Error, ErrorKind};
 
@@ -156,10 +153,7 @@ mod tests {
             .build()
             .unwrap();
 
-        assert_eq!(
-            ctx.config_dir(),
-            &PathBuf::from("/tmp/atrium-test-config")
-        );
+        assert_eq!(ctx.config_dir(), &PathBuf::from("/tmp/atrium-test-config"));
         assert_eq!(ctx.data_dir(), &PathBuf::from("/tmp/atrium-test-data"));
         assert_eq!(ctx.get("version"), Some("0.1.0"));
     }
