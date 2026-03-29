@@ -1,314 +1,432 @@
-//! ACP transport — long-lived agent process communicating via JSON-RPC.
+//! ACP transport — thin JSON-RPC 2.0 client over newline-delimited stdio.
 //!
-//! Spawns the agent binary once (e.g. `copilot --acp`, `codex-acp`), connects
-//! via the `agent-client-protocol` Rust SDK over stdin/stdout, and reuses the
-//! same session for all subsequent prompts.
-//!
-//! The ACP SDK uses `!Send` futures (`LocalSet`), so we run it on a dedicated
-//! background thread. The [`AcpTransport`] struct holds a channel to that
-//! thread, making it `Send + Sync` for the session layer.
+//! Fully `Send + Sync` — no dedicated thread, no `LocalSet`, no `Rc`.
+//! Spawns the agent binary once (e.g. `copilot --acp`), runs an I/O reader
+//! via `tokio::spawn`, and communicates using plain JSON-RPC messages.
 
-use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 
-use acp::Agent as _;
-use agent_client_protocol as acp;
 use atrium_error::{Error, ErrorKind, Result};
-use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::process::{Child, ChildStdin};
+use tokio::sync::{Mutex, broadcast, oneshot};
 
 use super::{PromptRequest, Transport};
 use crate::types::AgentChatEvent;
 
-// ── Messages to the background thread ───────────────────────────────
+// ── JSON-RPC wire types ─────────────────────────────────────────────
 
-struct AcpPrompt {
-    text: String,
-    event_tx: broadcast::Sender<AgentChatEvent>,
-    reply: oneshot::Sender<std::result::Result<(), String>>,
+#[derive(serde::Serialize)]
+struct RpcRequest<P: serde::Serialize> {
+    jsonrpc: &'static str,
+    id: i64,
+    method: &'static str,
+    params: P,
 }
 
-/// Shared mutable sender that the AcpClient reads from. Updated per prompt.
-type SharedEventTx = Rc<RefCell<broadcast::Sender<AgentChatEvent>>>;
+#[derive(serde::Serialize)]
+struct RpcResponse {
+    jsonrpc: &'static str,
+    id: serde_json::Value,
+    result: serde_json::Value,
+}
 
-enum AcpCommand {
-    Prompt(AcpPrompt),
-    Shutdown,
+#[derive(serde::Serialize)]
+struct RpcError {
+    jsonrpc: &'static str,
+    id: serde_json::Value,
+    error: RpcErrorBody,
+}
+
+#[derive(serde::Serialize)]
+struct RpcErrorBody {
+    code: i32,
+    message: &'static str,
+}
+
+// ── ACP param types (just what we need) ─────────────────────────────
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct InitParams {
+    protocol_version: u16,
+    client_info: ClientInfo,
+}
+
+#[derive(serde::Serialize)]
+struct ClientInfo {
+    name: &'static str,
+    version: &'static str,
+    title: &'static str,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NewSessionParams {
+    cwd: String,
+    mcp_servers: Vec<()>,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PromptParams {
+    session_id: String,
+    prompt: Vec<serde_json::Value>,
+}
+
+// ── Shared connection state ─────────────────────────────────────────
+
+type PendingMap = HashMap<i64, oneshot::Sender<serde_json::Value>>;
+
+struct AcpConn {
+    writer: Mutex<ChildStdin>,
+    pending: Mutex<PendingMap>,
+    next_id: AtomicI64,
+}
+
+impl AcpConn {
+    async fn request<P: serde::Serialize>(
+        &self,
+        method: &'static str,
+        params: P,
+    ) -> Result<serde_json::Value> {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let (tx, rx) = oneshot::channel();
+        self.pending.lock().await.insert(id, tx);
+
+        let msg = RpcRequest {
+            jsonrpc: "2.0",
+            id,
+            method,
+            params,
+        };
+        let mut line = serde_json::to_string(&msg)
+            .map_err(|e| Error::new(ErrorKind::DataInvalid, "serialize failed").set_source(e))?;
+        line.push('\n');
+
+        self.writer
+            .lock()
+            .await
+            .write_all(line.as_bytes())
+            .await
+            .map_err(|e| Error::new(ErrorKind::Io, "write to agent failed").set_source(e))?;
+
+        rx.await
+            .map_err(|_| Error::new(ErrorKind::ServiceUnavailable, "agent process exited"))
+    }
+
+    async fn respond(&self, id: serde_json::Value, result: serde_json::Value) {
+        let msg = RpcResponse {
+            jsonrpc: "2.0",
+            id,
+            result,
+        };
+        if let Ok(mut line) = serde_json::to_string(&msg) {
+            line.push('\n');
+            let _ = self.writer.lock().await.write_all(line.as_bytes()).await;
+        }
+    }
+
+    async fn respond_error(&self, id: serde_json::Value, code: i32, message: &'static str) {
+        let msg = RpcError {
+            jsonrpc: "2.0",
+            id,
+            error: RpcErrorBody { code, message },
+        };
+        if let Ok(mut line) = serde_json::to_string(&msg) {
+            line.push('\n');
+            let _ = self.writer.lock().await.write_all(line.as_bytes()).await;
+        }
+    }
 }
 
 // ── Transport ───────────────────────────────────────────────────────
 
-/// Long-lived ACP transport. Owns a channel to a background thread that holds
-/// the agent process + ACP connection.
+/// Long-lived ACP transport. Fully `Send + Sync` — no background thread.
 pub struct AcpTransport {
-    cmd_tx: mpsc::Sender<AcpCommand>,
+    conn: Arc<AcpConn>,
+    session_id: String,
+    /// Swapped before each prompt so the reader routes events to the right channel.
+    event_tx: Arc<tokio::sync::watch::Sender<broadcast::Sender<AgentChatEvent>>>,
     label: String,
 }
 
 impl AcpTransport {
-    /// Spawn the agent process and connect via ACP.
-    ///
-    /// The agent starts immediately; `initialize()` and `new_session()` run
-    /// on the background thread before this returns.
-    pub fn spawn(program: String, args: Vec<String>, workspace_path: PathBuf) -> Result<Self> {
+    /// Spawn the agent process and perform the ACP handshake.
+    pub async fn spawn(
+        program: String,
+        args: Vec<String>,
+        workspace_path: PathBuf,
+        executor: &atrium_executor::TaskExecutor,
+    ) -> Result<Self> {
         let label = format!("acp:{program}");
-        let (cmd_tx, cmd_rx) = mpsc::channel::<AcpCommand>(8);
 
-        // Channel to receive the init result from the background thread.
-        // Use std::sync (not tokio) so we can block without a runtime.
-        let (init_tx, init_rx) = std::sync::mpsc::channel::<std::result::Result<(), String>>();
+        let mut child = tokio::process::Command::new(&program)
+            .args(&args)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| {
+                Error::new(ErrorKind::Io, format!("failed to spawn `{program}`")).set_source(e)
+            })?;
 
-        let program_clone = program.clone();
-        std::thread::Builder::new()
-            .name(format!("acp-{program}"))
-            .spawn(move || {
-                let rt = match tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                {
-                    Ok(r) => r,
-                    Err(e) => {
-                        let _ = init_tx.send(Err(format!("runtime build failed: {e}")));
-                        return;
-                    }
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| Error::new(ErrorKind::Io, "no stdin"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| Error::new(ErrorKind::Io, "no stdout"))?;
+
+        let (placeholder_tx, _) = broadcast::channel::<AgentChatEvent>(1);
+        let (event_watch_tx, event_watch_rx) = tokio::sync::watch::channel(placeholder_tx);
+
+        let conn = Arc::new(AcpConn {
+            writer: Mutex::new(stdin),
+            pending: Mutex::new(HashMap::new()),
+            next_id: AtomicI64::new(0),
+        });
+
+        // Spawn the reader as a regular tokio task (Send!).
+        Self::spawn_reader(executor, Arc::clone(&conn), stdout, event_watch_rx, child);
+
+        // Initialize.
+        conn.request(
+            "initialize",
+            InitParams {
+                protocol_version: 1,
+                client_info: ClientInfo {
+                    name: "atrium",
+                    version: "0.1.0",
+                    title: "Atrium",
+                },
+            },
+        )
+        .await
+        .map_err(|e| e.with_operation("acp::initialize"))?;
+
+        // Create session.
+        let cwd = workspace_path
+            .canonicalize()
+            .unwrap_or(workspace_path)
+            .display()
+            .to_string();
+
+        let resp = conn
+            .request(
+                "session/new",
+                NewSessionParams {
+                    cwd,
+                    mcp_servers: vec![],
+                },
+            )
+            .await
+            .map_err(|e| e.with_operation("acp::new_session"))?;
+
+        let session_id = resp
+            .get("sessionId")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Error::new(ErrorKind::DataInvalid, "missing sessionId in response"))?
+            .to_owned();
+
+        tracing::info!(session_id = %session_id, label = %label, "ACP transport ready");
+
+        Ok(Self {
+            conn,
+            session_id,
+            event_tx: Arc::new(event_watch_tx),
+            label,
+        })
+    }
+
+    /// Spawn on the executor a read loop that dispatches responses and notifications.
+    fn spawn_reader(
+        executor: &atrium_executor::TaskExecutor,
+        conn: Arc<AcpConn>,
+        stdout: tokio::process::ChildStdout,
+        event_rx: tokio::sync::watch::Receiver<broadcast::Sender<AgentChatEvent>>,
+        child: Child,
+    ) {
+        executor.spawn(async move {
+            let _child = child; // keep alive; kill_on_drop handles cleanup
+            let mut lines = BufReader::new(stdout).lines();
+
+            while let Ok(Some(line)) = lines.next_line().await {
+                let Ok(msg) = serde_json::from_str::<serde_json::Value>(&line) else {
+                    continue;
                 };
 
-                let local = tokio::task::LocalSet::new();
-                local.block_on(
-                    &rt,
-                    acp_thread(program_clone, args, workspace_path, cmd_rx, init_tx),
-                );
-            })
-            .map_err(|e| {
-                Error::new(ErrorKind::Io, format!("failed to spawn ACP thread: {e}")).set_source(e)
-            })?;
+                // Response to our request (has "id", no "method").
+                if msg.get("id").is_some() && msg.get("method").is_none() {
+                    let id_num = msg["id"].as_i64().unwrap_or(-1);
+                    if let Some(tx) = conn.pending.lock().await.remove(&id_num) {
+                        if let Some(result) = msg.get("result") {
+                            let _ = tx.send(result.clone());
+                        } else if let Some(err) = msg.get("error") {
+                            let _ = tx.send(err.clone());
+                        }
+                    }
+                    continue;
+                }
 
-        // Block the current thread (not the runtime) waiting for init.
-        let init_result = init_rx
-            .recv_timeout(std::time::Duration::from_secs(30))
-            .map_err(|e| {
-                Error::new(
-                    ErrorKind::Timeout,
-                    format!("ACP init timed out or thread died: {e}"),
-                )
-            })?;
-        init_result.map_err(|msg| Error::new(ErrorKind::Unexpected, msg))?;
+                let method = msg
+                    .get("method")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
 
-        tracing::info!(label = %label, "ACP transport ready");
-        Ok(Self { cmd_tx, label })
+                match method {
+                    // Session notification (no id).
+                    "session/update" => {
+                        if let Some(params) = msg.get("params") {
+                            Self::handle_notification(params, &event_rx);
+                        }
+                    }
+                    // Permission request — auto-approve.
+                    "session/requestPermission" => {
+                        if let Some(id) = msg.get("id") {
+                            let option_id = msg
+                                .pointer("/params/options/0/optionId")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("allow");
+                            conn.respond(
+                                id.clone(),
+                                serde_json::json!({
+                                    "outcome": {
+                                        "selected": { "optionId": option_id }
+                                    }
+                                }),
+                            )
+                            .await;
+                        }
+                    }
+                    // Unknown request → method_not_found.
+                    _ if msg.get("id").is_some() => {
+                        if let Some(id) = msg.get("id") {
+                            conn.respond_error(id.clone(), -32601, "method not found")
+                                .await;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            // Agent exited — fail any pending requests.
+            for (_, tx) in conn.pending.lock().await.drain() {
+                let _ = tx.send(serde_json::json!(null));
+            }
+        });
+    }
+
+    fn handle_notification(
+        params: &serde_json::Value,
+        event_rx: &tokio::sync::watch::Receiver<broadcast::Sender<AgentChatEvent>>,
+    ) {
+        let Some(update) = params.get("update") else {
+            return;
+        };
+        let tx = event_rx.borrow();
+        let kind = update
+            .get("sessionUpdate")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default();
+
+        match kind {
+            "agent_message_chunk" => {
+                if let Some(text) = update.pointer("/content/text").and_then(|v| v.as_str()) {
+                    let _ = tx.send(AgentChatEvent::MessageChunk {
+                        content: text.to_owned(),
+                    });
+                }
+            }
+            "agent_thought_chunk" => {
+                if let Some(text) = update.pointer("/content/text").and_then(|v| v.as_str()) {
+                    let _ = tx.send(AgentChatEvent::ThoughtChunk {
+                        content: text.to_owned(),
+                    });
+                }
+            }
+            "tool_call" => {
+                let name = update
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                let status = update
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                let _ = tx.send(AgentChatEvent::ToolCall {
+                    name: name.to_owned(),
+                    status: status.to_owned(),
+                });
+            }
+            "tool_call_update" => {
+                let name = update
+                    .get("title")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                let status = update
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default();
+                let _ = tx.send(AgentChatEvent::ToolCall {
+                    name: name.to_owned(),
+                    status: status.to_owned(),
+                });
+            }
+            _ => {
+                tracing::trace!(kind, "unhandled ACP session update");
+            }
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl Transport for AcpTransport {
     async fn prompt(&self, req: PromptRequest<'_>) -> Result<()> {
-        let (reply_tx, reply_rx) = oneshot::channel();
+        // Route events to this prompt's channel.
+        let _ = self.event_tx.send(req.event_tx.clone());
+
+        let conn = Arc::clone(&self.conn);
+        let session_id = self.session_id.clone();
+        let text = req.prompt.to_owned();
         let mut cancel_rx = req.cancel_rx;
-        self.cmd_tx
-            .send(AcpCommand::Prompt(AcpPrompt {
-                text: req.prompt.to_owned(),
-                event_tx: req.event_tx.clone(),
-                reply: reply_tx,
-            }))
+
+        let prompt_fut = async move {
+            conn.request(
+                "session/prompt",
+                PromptParams {
+                    session_id,
+                    prompt: vec![serde_json::json!({"type": "text", "text": text})],
+                },
+            )
             .await
-            .map_err(|_| Error::new(ErrorKind::ServiceUnavailable, "ACP thread is gone"))?;
+        };
 
         tokio::select! {
-            result = reply_rx => {
-                let inner = result.map_err(|_| Error::new(ErrorKind::ServiceUnavailable, "ACP thread dropped reply"))?;
-                inner.map_err(|msg| Error::new(ErrorKind::Unexpected, msg))
+            result = prompt_fut => {
+                result.map_err(|e| e.with_operation("acp::prompt"))?;
+                Ok(())
             }
-            changed = cancel_rx.changed() => {
-                match changed {
-                    Ok(_) if *cancel_rx.borrow() => Err(Error::new(ErrorKind::Cancelled, "turn cancelled")),
-                    Ok(_) => Err(Error::new(ErrorKind::Unexpected, "ACP cancel channel updated unexpectedly")),
-                    Err(_) => Err(Error::new(ErrorKind::Unexpected, "ACP cancel channel closed")),
+            _ = cancel_rx.changed() => {
+                if *cancel_rx.borrow() {
+                    Err(Error::new(ErrorKind::Cancelled, "turn cancelled"))
+                } else {
+                    Err(Error::new(ErrorKind::Unexpected, "cancel channel closed"))
                 }
             }
         }
     }
 
     async fn shutdown(&self) {
-        let _ = self.cmd_tx.send(AcpCommand::Shutdown).await;
+        // Dropping the writer closes stdin → agent exits via kill_on_drop.
     }
 
     fn label(&self) -> String {
         self.label.clone()
     }
-}
-
-// ── Background thread ───────────────────────────────────────────────
-
-/// ACP client handler — forwards session notifications to the active broadcast channel.
-struct AcpClient {
-    event_tx: SharedEventTx,
-}
-
-#[async_trait::async_trait(?Send)]
-impl acp::Client for AcpClient {
-    async fn request_permission(
-        &self,
-        args: acp::RequestPermissionRequest,
-    ) -> acp::Result<acp::RequestPermissionResponse> {
-        // Auto-approve by selecting the first option.
-        let option_id = args
-            .options
-            .first()
-            .map(|o| o.option_id.clone())
-            .unwrap_or_else(|| "allow".into());
-        Ok(acp::RequestPermissionResponse::new(
-            acp::RequestPermissionOutcome::Selected(acp::SelectedPermissionOutcome::new(option_id)),
-        ))
-    }
-
-    async fn session_notification(&self, args: acp::SessionNotification) -> acp::Result<()> {
-        let tx = self.event_tx.borrow();
-        match args.update {
-            acp::SessionUpdate::AgentMessageChunk(chunk) => {
-                let text = match chunk.content {
-                    acp::ContentBlock::Text(t) => t.text,
-                    other => format!("{other:?}"),
-                };
-                let _ = tx.send(AgentChatEvent::MessageChunk { content: text });
-            }
-            acp::SessionUpdate::AgentThoughtChunk(chunk) => {
-                let text = match chunk.content {
-                    acp::ContentBlock::Text(t) => t.text,
-                    other => format!("{other:?}"),
-                };
-                let _ = tx.send(AgentChatEvent::ThoughtChunk { content: text });
-            }
-            acp::SessionUpdate::ToolCall(tc) => {
-                let _ = tx.send(AgentChatEvent::ToolCall {
-                    name: tc.title.clone(),
-                    status: format!("{:?}", tc.status),
-                });
-            }
-            acp::SessionUpdate::ToolCallUpdate(tc) => {
-                let _ = tx.send(AgentChatEvent::ToolCall {
-                    name: tc.fields.title.clone().unwrap_or_default(),
-                    status: format!("{:?}", tc.fields.status),
-                });
-            }
-            _ => {
-                tracing::trace!("acp notification: {:?}", args.update);
-            }
-        }
-        Ok(())
-    }
-}
-
-/// Main loop running on the dedicated ACP thread.
-async fn acp_thread(
-    program: String,
-    args: Vec<String>,
-    workspace_path: PathBuf,
-    mut cmd_rx: mpsc::Receiver<AcpCommand>,
-    init_tx: std::sync::mpsc::Sender<std::result::Result<(), String>>,
-) {
-    // Spawn agent process.
-    let child_result = tokio::process::Command::new(&program)
-        .args(&args)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn();
-
-    let mut child = match child_result {
-        Ok(c) => c,
-        Err(e) => {
-            let _ = init_tx.send(Err(format!("failed to spawn `{program}`: {e}")));
-            return;
-        }
-    };
-
-    let stdin = child.stdin.take().map(|s| s.compat_write());
-    let stdout = child.stdout.take().map(|s| s.compat());
-
-    let (stdin, stdout) = match (stdin, stdout) {
-        (Some(s), Some(o)) => (s, o),
-        _ => {
-            let _ = init_tx.send(Err("no stdin/stdout from agent".to_owned()));
-            return;
-        }
-    };
-
-    // Shared event sender — swapped per prompt.
-    let (placeholder_tx, _) = broadcast::channel::<AgentChatEvent>(1);
-    let shared_tx: SharedEventTx = Rc::new(RefCell::new(placeholder_tx));
-    let client = AcpClient {
-        event_tx: Rc::clone(&shared_tx),
-    };
-
-    let (conn, io_task) = acp::ClientSideConnection::new(client, stdin, stdout, |fut| {
-        tokio::task::spawn_local(fut);
-    });
-
-    // Drive I/O in background; keep child alive.
-    tokio::task::spawn_local(async move {
-        let _child = child;
-        if let Err(e) = io_task.await {
-            tracing::debug!("ACP I/O ended: {e}");
-        }
-    });
-
-    // Initialize.
-    if let Err(e) = conn
-        .initialize(
-            acp::InitializeRequest::new(acp::ProtocolVersion::V1)
-                .client_info(acp::Implementation::new("atrium", "0.1.0").title("Atrium")),
-        )
-        .await
-    {
-        let _ = init_tx.send(Err(format!("ACP initialize failed: {e}")));
-        return;
-    }
-
-    // Create session.
-    let abs_workspace = workspace_path
-        .canonicalize()
-        .unwrap_or_else(|_| workspace_path.clone());
-    let session = match conn
-        .new_session(acp::NewSessionRequest::new(abs_workspace))
-        .await
-    {
-        Ok(s) => s,
-        Err(e) => {
-            let _ = init_tx.send(Err(format!("ACP new_session failed: {e}")));
-            return;
-        }
-    };
-
-    tracing::info!(session_id = %session.session_id, "ACP session ready");
-    let _ = init_tx.send(Ok(()));
-
-    // Process prompts sequentially.
-    while let Some(cmd) = cmd_rx.recv().await {
-        match cmd {
-            AcpCommand::Prompt(p) => {
-                // Swap the shared event sender so notifications route to this prompt's channel.
-                *shared_tx.borrow_mut() = p.event_tx;
-
-                let result = conn
-                    .prompt(acp::PromptRequest::new(
-                        session.session_id.clone(),
-                        vec![p.text.into()],
-                    ))
-                    .await;
-
-                let reply = match result {
-                    Ok(resp) => {
-                        tracing::info!(stop_reason = ?resp.stop_reason, "ACP prompt completed");
-                        Ok(())
-                    }
-                    Err(e) => Err(format!("ACP prompt failed: {e}")),
-                };
-                let _ = p.reply.send(reply);
-            }
-            AcpCommand::Shutdown => break,
-        }
-    }
-
-    tracing::info!("ACP thread exiting");
 }

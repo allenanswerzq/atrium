@@ -10,6 +10,13 @@ use atrium_agent::session::AgentChatManager;
 use atrium_agent::transport::TransportConfig;
 use atrium_agent::types::{AgentChatEvent, AgentChatStatus};
 use atrium_agent::{AgentKind, ErrorKind};
+use atrium_executor::TaskManager;
+
+fn new_test_manager() -> (AgentChatManager, TaskManager) {
+    let tm = TaskManager::current();
+    let mgr = AgentChatManager::new(tm.executor());
+    (mgr, tm)
+}
 
 async fn drain_turn(rx: &mut broadcast::Receiver<AgentChatEvent>, secs: u64) -> String {
     let mut text = String::new();
@@ -28,7 +35,7 @@ async fn drain_turn(rx: &mut broadcast::Receiver<AgentChatEvent>, secs: u64) -> 
 
 #[tokio::test]
 async fn create_two_sessions_and_list() {
-    let mut mgr = AgentChatManager::new();
+    let (mut mgr, _tm) = new_test_manager();
     let cfg = AgentKind::Copilot.default_terminal_config();
     let (id1, _) = mgr
         .create_with_config(AgentKind::Copilot, ".".into(), None, cfg.clone())
@@ -46,7 +53,7 @@ async fn create_two_sessions_and_list() {
 
 #[tokio::test]
 async fn kill_sets_exited_and_fires_event() {
-    let mut mgr = AgentChatManager::new();
+    let (mut mgr, _tm) = new_test_manager();
     let cfg = AgentKind::Copilot.default_terminal_config();
     let (id, mut rx) = mgr
         .create_with_config(AgentKind::Copilot, ".".into(), None, cfg)
@@ -61,7 +68,7 @@ async fn kill_sets_exited_and_fires_event() {
 
 #[tokio::test]
 async fn remove_deletes_session() {
-    let mut mgr = AgentChatManager::new();
+    let (mut mgr, _tm) = new_test_manager();
     let cfg = AgentKind::Copilot.default_terminal_config();
     let (id, _) = mgr
         .create_with_config(AgentKind::Copilot, ".".into(), None, cfg)
@@ -74,7 +81,7 @@ async fn remove_deletes_session() {
 
 #[tokio::test]
 async fn send_rejects_while_working() {
-    let mut mgr = AgentChatManager::new();
+    let (mut mgr, _tm) = new_test_manager();
     let cfg = AgentKind::Copilot.default_terminal_config();
     let (id, _) = mgr
         .create_with_config(AgentKind::Copilot, ".".into(), None, cfg)
@@ -88,7 +95,7 @@ async fn send_rejects_while_working() {
 
 #[tokio::test]
 async fn event_sequence_on_failed_turn() {
-    let mut mgr = AgentChatManager::new();
+    let (mut mgr, _tm) = new_test_manager();
     let cfg = TransportConfig::Terminal {
         program: "no-such-program-xyz".into(),
         base_args: vec![],
@@ -133,7 +140,7 @@ async fn event_sequence_on_failed_turn() {
 
 #[tokio::test]
 async fn transport_label_terminal() {
-    let mut mgr = AgentChatManager::new();
+    let (mut mgr, _tm) = new_test_manager();
     let cfg = AgentKind::Copilot.default_terminal_config();
     let (id, _) = mgr
         .create_with_config(AgentKind::Copilot, ".".into(), None, cfg)
@@ -147,7 +154,7 @@ async fn transport_label_terminal() {
 
 #[tokio::test]
 async fn transport_label_openai() {
-    let mut mgr = AgentChatManager::new();
+    let (mut mgr, _tm) = new_test_manager();
     let cfg = TransportConfig::OpenAi {
         base_url: "http://localhost:11434/v1".into(),
         api_key: None,
@@ -182,7 +189,7 @@ fn config_serde_roundtrip() {
 #[tokio::test]
 async fn copilot_terminal_single_turn() {
     let cwd = std::env::current_dir().unwrap();
-    let mut mgr = AgentChatManager::new();
+    let (mut mgr, _tm) = new_test_manager();
     let cfg = AgentKind::Copilot.default_terminal_config();
     let (id, mut rx) = mgr
         .create_with_config(AgentKind::Copilot, cwd, None, cfg)
@@ -198,7 +205,7 @@ async fn copilot_terminal_single_turn() {
 #[tokio::test]
 async fn copilot_acp_single_turn() {
     let cwd = std::env::current_dir().unwrap();
-    let mut mgr = AgentChatManager::new();
+    let (mut mgr, _tm) = new_test_manager();
     let (id, mut rx) = mgr.create(AgentKind::Copilot, cwd, None).await.unwrap();
 
     mgr.send_message(&id, "Reply with exactly: ACP_SINGLE_OK".into())
@@ -210,13 +217,14 @@ async fn copilot_acp_single_turn() {
 #[tokio::test]
 async fn copilot_acp_multi_turn() {
     let cwd = std::env::current_dir().unwrap();
-    let mut mgr = AgentChatManager::new();
+    let (mut mgr, _tm) = new_test_manager();
     let (id, mut rx) = mgr.create(AgentKind::Copilot, cwd, None).await.unwrap();
 
     // Turn 1: tell it a secret.
     mgr.send_message(&id, "Remember this code word: MANGO".into())
         .unwrap();
     let t1 = drain_turn(&mut rx, 120).await;
+    println!("turn 1 output:\n{t1}");
     assert!(!t1.is_empty(), "turn 1 was empty");
 
     // Finalize turn 1.

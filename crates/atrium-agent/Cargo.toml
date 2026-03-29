@@ -6,15 +6,14 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-atrium-error = { workspace = true }
+atrium-error    = { workspace = true }
+atrium-executor = { workspace = true }
 
-agent-client-protocol = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }
 strum      = { workspace = true }
 async-trait = { workspace = true }
 tokio      = { workspace = true, features = ["process", "io-util", "sync", "rt", "macros"] }
-tokio-util = { workspace = true }
 futures    = { workspace = true }
 reqwest    = { workspace = true }
 tracing    = { workspace = true }
@@ -23,5 +22,6 @@ tracing    = { workspace = true }
 workspace = true
 
 [dev-dependencies]
+atrium-executor = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

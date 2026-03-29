@@ -16,6 +16,7 @@ pub mod terminal;
 use std::path::PathBuf;
 
 use atrium_error::{Error, ErrorKind, Result};
+use atrium_executor::TaskExecutor;
 use tokio::sync::broadcast;
 
 use crate::types::{AgentChatEvent, ChatMessage};
@@ -104,10 +105,11 @@ impl Default for TransportConfig {
 pub async fn create(
     config: TransportConfig,
     workspace_path: PathBuf,
+    executor: &TaskExecutor,
 ) -> Result<Box<dyn Transport>> {
     match config {
         TransportConfig::Acp { program, args } => {
-            let t = acp::AcpTransport::spawn(program, args, workspace_path)?;
+            let t = acp::AcpTransport::spawn(program, args, workspace_path, executor).await?;
             Ok(Box::new(t))
         }
         TransportConfig::Terminal { program, base_args } => {

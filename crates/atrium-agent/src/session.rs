@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use atrium_error::{Error, ErrorKind, Result};
+use atrium_executor::TaskExecutor;
 use tokio::sync::broadcast;
 
 use crate::kind::AgentKind;
@@ -94,13 +95,15 @@ impl AgentChatSession {
 /// Manages agent chat sessions.
 pub struct AgentChatManager {
     sessions: HashMap<AgentSessionId, AgentChatSession>,
+    executor: TaskExecutor,
     next_id: u64,
 }
 
 impl AgentChatManager {
-    pub fn new() -> Self {
+    pub fn new(executor: TaskExecutor) -> Self {
         Self {
             sessions: HashMap::new(),
+            executor,
             next_id: 0,
         }
     }
@@ -140,7 +143,7 @@ impl AgentChatManager {
         let session_id = AgentSessionId::new(format!("agent-chat-{id}"));
         let (event_tx, event_rx) = broadcast::channel::<AgentChatEvent>(256);
 
-        let transport = transport::create(config, workspace_path.clone()).await?;
+        let transport = transport::create(config, workspace_path.clone(), &self.executor).await?;
 
         let session = AgentChatSession {
             id: session_id.clone(),
@@ -169,23 +172,9 @@ impl AgentChatManager {
         Ok((session_id, event_rx))
     }
 
-    fn shutdown_transport(transport: Arc<dyn Transport>) {
-        if let Ok(handle) = tokio::runtime::Handle::try_current() {
-            handle.spawn(async move {
-                transport.shutdown().await;
-            });
-            return;
-        }
-
-        std::thread::spawn(move || {
-            if let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-            {
-                runtime.block_on(async move {
-                    transport.shutdown().await;
-                });
-            }
+    fn shutdown_transport(&self, transport: Arc<dyn Transport>) {
+        self.executor.spawn(async move {
+            transport.shutdown().await;
         });
     }
 
@@ -222,7 +211,7 @@ impl AgentChatManager {
         let messages = session.messages.clone();
         let event_tx = session.event_tx.clone();
 
-        tokio::spawn(async move {
+        self.executor.spawn(async move {
             let req = PromptRequest {
                 prompt: &message,
                 messages: &messages,
@@ -262,11 +251,12 @@ impl AgentChatManager {
         if let Some(cancel_tx) = session.turn_cancel.take() {
             let _ = cancel_tx.send(true);
         }
-        Self::shutdown_transport(Arc::clone(&session.transport));
+        let transport = Arc::clone(&session.transport);
         session.status = AgentChatStatus::Exited;
         let _ = session
             .event_tx
             .send(AgentChatEvent::SessionExited { exit_code: None });
+        self.shutdown_transport(transport);
         Ok(())
     }
 
@@ -275,7 +265,7 @@ impl AgentChatManager {
             if let Some(cancel_tx) = session.turn_cancel.take() {
                 let _ = cancel_tx.send(true);
             }
-            Self::shutdown_transport(Arc::clone(&session.transport));
+            self.shutdown_transport(Arc::clone(&session.transport));
         }
     }
 
@@ -300,11 +290,5 @@ impl AgentChatManager {
 
     pub fn session_mut(&mut self, id: &AgentSessionId) -> Option<&mut AgentChatSession> {
         self.sessions.get_mut(id)
-    }
-}
-
-impl Default for AgentChatManager {
-    fn default() -> Self {
-        Self::new()
     }
 }
