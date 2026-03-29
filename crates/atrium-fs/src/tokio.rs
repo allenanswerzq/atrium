@@ -201,7 +201,7 @@ pub async fn fsync_dir(parent: &Path) -> Result<()> {
     #[cfg(windows)]
     {
         let _ = parent;
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(windows))]

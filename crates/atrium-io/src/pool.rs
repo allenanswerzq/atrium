@@ -49,11 +49,10 @@ impl IoPool {
 
     /// Acquire a permit, waiting if all are in use.
     pub async fn acquire(&self) -> OwnedSemaphorePermit {
-        self.semaphore
-            .clone()
-            .acquire_owned()
-            .await
-            .expect("IoPool semaphore closed")
+        match self.semaphore.clone().acquire_owned().await {
+            Ok(permit) => permit,
+            Err(_) => panic!("IoPool semaphore closed"),
+        }
     }
 
     /// Try to acquire a permit without waiting.

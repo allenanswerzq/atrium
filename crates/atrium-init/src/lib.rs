@@ -24,6 +24,7 @@
 //! // full runtime available
 //! ```
 
+use std::rc::Rc;
 use std::sync::Arc;
 
 use atrium_context::GlobalCtxt;
@@ -44,10 +45,10 @@ struct EarlyInner {
 /// Handle to the early-initialized Atrium runtime.
 ///
 /// Provides minimal resources for the bootstrap phase.
-/// Cheap to clone (backed by `Arc`).
+/// Cheap to clone (backed by `Rc`).
 #[derive(Clone)]
 pub struct EarlyInitialized {
-    inner: Arc<EarlyInner>,
+    inner: Rc<EarlyInner>,
 }
 
 impl EarlyInitialized {
@@ -75,14 +76,14 @@ impl EarlyInitialized {
     ///
     /// Can only be called once. Returns `None` if already taken.
     pub fn take_application(&mut self) -> Option<gpui::Application> {
-        Arc::get_mut(&mut self.inner).and_then(|inner| inner.application.take())
+        Rc::get_mut(&mut self.inner).and_then(|inner| inner.application.take())
     }
 
     /// Finalize into a fully initialized runtime.
     ///
     /// Consumes the early handle. All clones must be dropped first.
     pub async fn finalize(self) -> Result<Initialized> {
-        let inner = Arc::try_unwrap(self.inner).map_err(|_| {
+        let inner = Rc::try_unwrap(self.inner).map_err(|_| {
             Error::new(
                 ErrorKind::InvalidInput,
                 "Cannot finalize: other references to EarlyInitialized exist",
@@ -180,7 +181,7 @@ pub async fn early_init() -> Result<EarlyInitialized> {
     );
 
     Ok(EarlyInitialized {
-        inner: Arc::new(EarlyInner {
+        inner: Rc::new(EarlyInner {
             task_manager,
             ctxt,
             io_pool,

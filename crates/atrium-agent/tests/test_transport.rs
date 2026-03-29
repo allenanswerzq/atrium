@@ -9,7 +9,7 @@ use tokio::sync::broadcast;
 use atrium_agent::session::AgentChatManager;
 use atrium_agent::transport::TransportConfig;
 use atrium_agent::types::{AgentChatEvent, AgentChatStatus};
-use atrium_agent::{AgentKind, ErrorKind};
+use atrium_agent::{AgentKind};
 use atrium_executor::TaskManager;
 
 fn new_test_manager() -> (AgentChatManager, TaskManager) {
@@ -80,20 +80,7 @@ async fn remove_deletes_session() {
 }
 
 #[tokio::test]
-async fn send_rejects_while_working() {
-    let (mut mgr, _tm) = new_test_manager();
-    let cfg = AgentKind::Copilot.default_terminal_config();
-    let (id, _) = mgr
-        .create_with_config(AgentKind::Copilot, ".".into(), None, cfg)
-        .await
-        .unwrap();
-    let _ = mgr.send_message(&id, "one".into());
-    let err = mgr.send_message(&id, "two".into());
-    assert!(err.is_err());
-    assert_eq!(err.unwrap_err().kind(), ErrorKind::InvalidInput);
-}
 
-#[tokio::test]
 async fn event_sequence_on_failed_turn() {
     let (mut mgr, _tm) = new_test_manager();
     let cfg = TransportConfig::Terminal {
@@ -104,20 +91,15 @@ async fn event_sequence_on_failed_turn() {
         .create_with_config(AgentKind::Copilot, ".".into(), None, cfg)
         .await
         .unwrap();
-    mgr.send_message(&id, "hello".into()).unwrap();
+    mgr.send_message(&id, "hello".into()).await.unwrap();
 
     let mut events = Vec::new();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
-    loop {
-        match tokio::time::timeout_at(deadline, rx.recv()).await {
-            Ok(Ok(ev)) => {
-                let done = matches!(ev, AgentChatEvent::TurnCompleted);
-                events.push(ev);
-                if done {
-                    break;
-                }
-            }
-            _ => break,
+    while let Ok(Ok(ev)) = tokio::time::timeout_at(deadline, rx.recv()).await {
+        let done = matches!(ev, AgentChatEvent::TurnCompleted);
+        events.push(ev);
+        if done {
+            break;
         }
     }
     assert!(
@@ -197,6 +179,7 @@ async fn copilot_terminal_single_turn() {
         .unwrap();
 
     mgr.send_message(&id, "Reply with exactly: TERMINAL_OK".into())
+        .await
         .unwrap();
     let text = drain_turn(&mut rx, 60).await;
     assert!(text.contains("TERMINAL_OK"), "got: {text}");
@@ -209,6 +192,7 @@ async fn copilot_acp_single_turn() {
     let (id, mut rx) = mgr.create(AgentKind::Copilot, cwd, None).await.unwrap();
 
     mgr.send_message(&id, "Reply with exactly: ACP_SINGLE_OK".into())
+        .await
         .unwrap();
     let text = drain_turn(&mut rx, 120).await;
     assert!(text.contains("ACP_SINGLE_OK"), "got: {text}");
@@ -222,6 +206,7 @@ async fn copilot_acp_multi_turn() {
 
     // Turn 1: tell it a secret.
     mgr.send_message(&id, "Remember this code word: MANGO".into())
+        .await
         .unwrap();
     let t1 = drain_turn(&mut rx, 120).await;
     println!("turn 1 output:\n{t1}");
@@ -237,6 +222,7 @@ async fn copilot_acp_multi_turn() {
 
     // Turn 2: agent should remember via ACP session.
     mgr.send_message(&id, "What code word did I tell you?".into())
+        .await
         .unwrap();
     let t2 = drain_turn(&mut rx, 120).await;
     assert!(t2.to_uppercase().contains("MANGO"), "agent forgot: {t2}");
@@ -269,4 +255,70 @@ fn kind_default_acp_falls_back_when_needed() {
     assert!(
         matches!(cfg, TransportConfig::Terminal { program, base_args } if program == "cursor" && base_args.is_empty())
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn copilot_acp_100_sessions() {
+    use atrium_agent::transport::{self, PromptRequest};
+
+    const N: usize = 100;
+    let cwd = std::env::current_dir().unwrap();
+    let tm = TaskManager::current();
+    let executor = tm.executor();
+
+    // Create 100 ACP transports directly.
+    let mut transports = Vec::with_capacity(N);
+    for i in 0..N {
+        let cfg = AgentKind::Copilot.default_acp_config();
+        let t = transport::create(cfg, cwd.clone(), &executor)
+            .await
+            .unwrap_or_else(|e| panic!("failed to create transport {i}: {e}"));
+        transports.push(t);
+    }
+    println!("all {N} transports created");
+
+    // Send prompts to all sessions in parallel.
+    let start = std::time::Instant::now();
+    let mut handles = Vec::with_capacity(N);
+    for (i, t) in transports.into_iter().enumerate() {
+        handles.push(tokio::spawn(async move {
+            let msg = format!("Reply with exactly: BATCH_{i}");
+            let (event_tx, mut event_rx) = broadcast::channel::<AgentChatEvent>(256);
+            let (_cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
+
+            let req = PromptRequest {
+                prompt: &msg,
+                messages: &[],
+                model_id: None,
+                event_tx: &event_tx,
+                cancel_rx,
+            };
+            t.prompt(req).await.unwrap_or_else(|e| panic!("session {i} prompt failed: {e}"));
+
+            // Collect all message chunks that were broadcast during the prompt.
+            let mut text = String::new();
+            while let Ok(ev) = event_rx.try_recv() {
+                if let AgentChatEvent::MessageChunk { content } = ev {
+                    text.push_str(&content);
+                }
+            }
+
+            let marker = format!("BATCH_{i}");
+            assert!(
+                text.contains(&marker),
+                "session {i} missing marker {marker}: {text}"
+            );
+            println!("session {i}: {} chars", text.len());
+            i
+        }));
+    }
+
+    let mut success = 0;
+    for handle in handles {
+        handle.await.unwrap();
+        success += 1;
+    }
+    let elapsed = start.elapsed();
+    println!("all {success}/{N} sessions completed in {elapsed:.1?}");
+    assert_eq!(success, N);
 }

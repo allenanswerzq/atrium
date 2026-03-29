@@ -5,7 +5,7 @@
 
 use atrium_error::{Error, ErrorKind, Result};
 
-use super::{PromptRequest, Transport, consume_sse_stream};
+use super::{PromptRequest, Transport};
 use crate::types::AgentChatEvent;
 
 /// HTTP-based transport talking to an OpenAI-compatible API.

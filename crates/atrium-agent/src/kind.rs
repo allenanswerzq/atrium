@@ -40,6 +40,11 @@ impl AgentKind {
         self.into()
     }
 
+    /// Default transport config for this agent.
+    pub fn default_transport_config(self) -> TransportConfig {
+        self.default_acp_config()
+    }
+
     /// Default ACP transport config for this agent.
     pub fn default_acp_config(self) -> TransportConfig {
         match self {

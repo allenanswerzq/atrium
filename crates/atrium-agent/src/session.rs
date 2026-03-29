@@ -114,7 +114,13 @@ impl AgentChatManager {
             .ok_or_else(|| Error::new(ErrorKind::NotFound, format!("session not found: {id}")))
     }
 
-    /// Create a new session using the agent's default ACP config.
+    fn next_session_id(&mut self) -> AgentSessionId {
+        let id = self.next_id;
+        self.next_id += 1;
+        AgentSessionId::new(format!("agent-chat-{id}"))
+    }
+
+    /// Create a new session using the agent's default transport config.
     pub async fn create(
         &mut self,
         agent_kind: AgentKind,
@@ -125,7 +131,7 @@ impl AgentChatManager {
             agent_kind,
             workspace_path,
             model_id,
-            agent_kind.default_acp_config(),
+            agent_kind.default_transport_config(),
         )
         .await
     }
@@ -138,11 +144,8 @@ impl AgentChatManager {
         model_id: Option<String>,
         config: TransportConfig,
     ) -> Result<(AgentSessionId, broadcast::Receiver<AgentChatEvent>)> {
-        let id = self.next_id;
-        self.next_id += 1;
-        let session_id = AgentSessionId::new(format!("agent-chat-{id}"));
+        let session_id = self.next_session_id();
         let (event_tx, event_rx) = broadcast::channel::<AgentChatEvent>(256);
-
         let transport = transport::create(config, workspace_path.clone(), &self.executor).await?;
 
         let session = AgentChatSession {
@@ -178,7 +181,11 @@ impl AgentChatManager {
         });
     }
 
-    pub fn send_message(&mut self, session_id: &AgentSessionId, message: String) -> Result<()> {
+    pub async fn send_message(
+        &mut self,
+        session_id: &AgentSessionId,
+        message: String,
+    ) -> Result<()> {
         let session = self.get_session(session_id)?;
         if session.status == AgentChatStatus::Working {
             return Err(Error::new(
@@ -211,29 +218,25 @@ impl AgentChatManager {
         let messages = session.messages.clone();
         let event_tx = session.event_tx.clone();
 
-        self.executor.spawn(async move {
-            let req = PromptRequest {
-                prompt: &message,
-                messages: &messages,
-                model_id: model_id.as_deref(),
-                event_tx: &event_tx,
-                cancel_rx,
-            };
+        let req = PromptRequest {
+            prompt: &message,
+            messages: &messages,
+            model_id: model_id.as_deref(),
+            event_tx: &event_tx,
+            cancel_rx,
+        };
 
-            let result = transport.prompt(req).await;
-
-            match result {
-                Ok(()) => {
-                    let _ = event_tx.send(AgentChatEvent::TurnCompleted);
-                }
-                Err(e) => {
-                    let _ = event_tx.send(AgentChatEvent::Error {
-                        message: e.to_string(),
-                    });
-                    let _ = event_tx.send(AgentChatEvent::TurnCompleted);
-                }
+        match transport.prompt(req).await {
+            Ok(()) => {
+                let _ = event_tx.send(AgentChatEvent::TurnCompleted);
             }
-        });
+            Err(e) => {
+                let _ = event_tx.send(AgentChatEvent::Error {
+                    message: e.to_string(),
+                });
+                let _ = event_tx.send(AgentChatEvent::TurnCompleted);
+            }
+        }
 
         Ok(())
     }

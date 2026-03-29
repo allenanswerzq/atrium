@@ -47,11 +47,9 @@ pub fn list(repo_path: &Path) -> Result<Vec<Worktree>> {
             .set_source(e)
     })?;
 
-    for name in &names {
-        if let Some(name) = name {
-            if let Some(wt) = build_linked_worktree(&repo, name) {
-                worktrees.push(wt);
-            }
+    for name in names.iter().flatten() {
+        if let Some(wt) = build_linked_worktree(&repo, name) {
+            worktrees.push(wt);
         }
     }
 

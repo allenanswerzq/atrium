@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 /// Interval between config file checks.
+#[allow(dead_code)]
 pub const CONFIG_CHECK_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Watches the config file for modifications and triggers reload.

@@ -20,10 +20,6 @@ use crate::types::{
 /// then read the current state via `styled_lines()`, `cursor()`, etc.
 pub struct TerminalEmulator {
     parser: vt100::Parser,
-    /// Lines that scrolled off the top of the visible grid.
-    scrollback: Vec<TerminalStyledLine>,
-    /// Max scrollback lines to keep.
-    max_scrollback: usize,
 }
 
 impl TerminalEmulator {
@@ -31,22 +27,12 @@ impl TerminalEmulator {
     pub fn new(rows: u16, cols: u16) -> Self {
         Self {
             parser: vt100::Parser::new(rows, cols, 0),
-            scrollback: Vec::new(),
-            max_scrollback: 10_000,
         }
     }
 
     /// Feed raw PTY bytes into the emulator.
     pub fn process(&mut self, bytes: &[u8]) {
-        // Capture lines before processing to detect scrolloff
-        let old_scrollback = self.parser.screen().scrollback();
-
         self.parser.process(bytes);
-
-        // Check if new lines scrolled off — vt100 doesn't keep scrollback,
-        // so we'd need to detect and save them. For now, scrollback is
-        // populated from the visible grid when requested.
-        let _ = old_scrollback;
     }
 
     /// Resize the terminal grid.

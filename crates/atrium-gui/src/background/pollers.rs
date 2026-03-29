@@ -3,10 +3,13 @@
 use std::time::Duration;
 
 /// Interval for terminal polling when active.
+#[allow(dead_code)]
 pub const TERMINAL_POLL_ACTIVE: Duration = Duration::from_millis(16);
 /// Interval for terminal polling when idle.
+#[allow(dead_code)]
 pub const TERMINAL_POLL_IDLE: Duration = Duration::from_millis(200);
 /// Interval for log refresh.
+#[allow(dead_code)]
 pub const LOG_POLL_INTERVAL: Duration = Duration::from_millis(500);
 
 /// Background poller handles.

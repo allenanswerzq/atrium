@@ -133,19 +133,10 @@ mod tests {
         let (mut pty, mut reader) = TerminalPty::spawn(&test_shell(), &test_cwd(), 80, 24).unwrap();
 
         let mut buf = [0u8; 4096];
-        let mut total = 0;
-        let deadline = Instant::now() + Duration::from_secs(3);
-
-        while Instant::now() < deadline {
-            match reader.read(&mut buf) {
-                Ok(0) => break,
-                Ok(n) => {
-                    total += n;
-                    break;
-                }
-                Err(_) => break,
-            }
-        }
+        let total = match reader.read(&mut buf) {
+            Ok(0) | Err(_) => 0,
+            Ok(n) => n,
+        };
 
         assert!(total > 0, "expected shell to produce output (prompt)");
         drop(reader);

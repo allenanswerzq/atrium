@@ -15,7 +15,7 @@ pub mod terminal;
 
 use std::path::PathBuf;
 
-use atrium_error::{Error, ErrorKind, Result};
+use atrium_error::Result;
 use atrium_executor::TaskExecutor;
 use tokio::sync::broadcast;
 

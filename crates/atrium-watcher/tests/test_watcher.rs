@@ -1,5 +1,7 @@
 //! Integration tests for FileWatcher.
 
+#![allow(clippy::unwrap_used, clippy::expect_used)]
+
 use atrium_executor::TaskManager;
 use atrium_watcher::FileWatcher;
 use std::io::Write;

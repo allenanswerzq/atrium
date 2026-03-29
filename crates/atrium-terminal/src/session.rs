@@ -84,7 +84,7 @@ impl TerminalRuntime {
             .spawn(move || {
                 reader_loop(reader, emu_ref, state_ref);
             })
-            .map_err(|e| Error::from(e))?;
+            .map_err(Error::from)?;
 
         Ok(Self {
             pty,
@@ -158,6 +158,7 @@ pub struct TerminalSession {
 
 impl TerminalSession {
     /// Spawn a new session with a live PTY (managed by executor).
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         executor: &TaskExecutor,
         session_id: TerminalSessionId,

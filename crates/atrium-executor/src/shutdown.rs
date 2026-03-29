@@ -47,12 +47,11 @@ impl Future for GracefulShutdown {
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         ready!(self.shutdown.poll_unpin(cx));
-        Poll::Ready(
-            self.get_mut()
-                .guard
-                .take()
-                .expect("GracefulShutdown polled after completion"),
-        )
+        if let Some(guard) = self.get_mut().guard.take() {
+            Poll::Ready(guard)
+        } else {
+            Poll::Pending
+        }
     }
 }
 
@@ -143,7 +142,7 @@ mod tests {
         let mut tasks = Vec::with_capacity(100);
         for _ in 0..100 {
             let shutdown = shutdown.clone();
-            tasks.push(tokio::task::spawn(async move { shutdown.await }));
+            tasks.push(tokio::task::spawn(shutdown));
         }
         drop(signal);
         join_all(tasks).await;

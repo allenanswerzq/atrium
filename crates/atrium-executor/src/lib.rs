@@ -121,6 +121,13 @@ impl PanickedTaskError {
         };
         Self { task_name, error }
     }
+
+    fn internal(task_name: &'static str, message: &'static str) -> Self {
+        Self {
+            task_name,
+            error: Some(message.to_owned()),
+        }
+    }
 }
 
 // ── TaskManager ──────────────────────────────────────────────────────
@@ -169,7 +176,6 @@ impl TaskManager {
             on_shutdown: self.on_shutdown.clone(),
             panicked_tasks_tx: self.panicked_tasks_tx.clone(),
             metrics: TaskMetrics::default(),
-            graceful_tasks: Arc::clone(&self.graceful_tasks),
         }
     }
 
@@ -215,7 +221,13 @@ impl Future for TaskManager {
 
     fn poll(self: std::pin::Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let err = ready!(self.get_mut().panicked_tasks_rx.poll_recv(cx));
-        Poll::Ready(err.expect("panicked_tasks channel cannot close while TaskManager lives"))
+        match err {
+            Some(err) => Poll::Ready(err),
+            None => Poll::Ready(PanickedTaskError::internal(
+                "task-manager",
+                "panicked task channel closed unexpectedly",
+            )),
+        }
     }
 }
 
@@ -228,7 +240,6 @@ pub struct TaskExecutor {
     on_shutdown: Shutdown,
     panicked_tasks_tx: UnboundedSender<PanickedTaskError>,
     metrics: TaskMetrics,
-    graceful_tasks: Arc<AtomicUsize>,
 }
 
 impl TaskExecutor {
