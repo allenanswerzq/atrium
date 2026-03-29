@@ -8,7 +8,9 @@
 //! background thread. The [`AcpTransport`] struct holds a channel to that
 //! thread, making it `Send + Sync` for the session layer.
 
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use agent_client_protocol as acp;
 use acp::Agent as _;
@@ -25,6 +27,9 @@ struct AcpPrompt {
     event_tx: broadcast::Sender<AgentChatEvent>,
     reply: oneshot::Sender<Result<(), String>>,
 }
+
+/// Shared mutable sender that the AcpClient reads from. Updated per prompt.
+type SharedEventTx = Rc<RefCell<broadcast::Sender<AgentChatEvent>>>;
 
 enum AcpCommand {
     Prompt(AcpPrompt),
@@ -54,7 +59,8 @@ impl AcpTransport {
         let (cmd_tx, cmd_rx) = mpsc::channel::<AcpCommand>(8);
 
         // Channel to receive the init result from the background thread.
-        let (init_tx, init_rx) = oneshot::channel::<Result<(), String>>();
+        // Use std::sync (not tokio) so we can block without a runtime.
+        let (init_tx, init_rx) = std::sync::mpsc::channel::<Result<(), String>>();
 
         let program_clone = program.clone();
         std::thread::Builder::new()
@@ -76,17 +82,11 @@ impl AcpTransport {
             })
             .map_err(|e| format!("failed to spawn ACP thread: {e}"))?;
 
-        // Wait for init to complete.
-        std::thread::scope(|_| {
-            // We need to block the current (potentially async) context.
-            // Use a tiny runtime to await the oneshot.
-            tokio::runtime::Builder::new_current_thread()
-                .build()
-                .map_err(|e| format!("temp runtime: {e}"))?
-                .block_on(async {
-                    init_rx.await.map_err(|_| "ACP thread exited during init".to_owned())?
-                })
-        })?;
+        // Block the current thread (not the runtime) waiting for init.
+        let init_result = init_rx
+            .recv_timeout(std::time::Duration::from_secs(30))
+            .map_err(|e| format!("ACP init timed out or thread died: {e}"))?;
+        init_result?;
 
         tracing::info!(label = %label, "ACP transport ready");
         Ok(Self { cmd_tx, label })
@@ -120,9 +120,9 @@ impl Transport for AcpTransport {
 
 // ── Background thread ───────────────────────────────────────────────
 
-/// ACP client handler — forwards session notifications to the broadcast channel.
+/// ACP client handler — forwards session notifications to the active broadcast channel.
 struct AcpClient {
-    event_tx: broadcast::Sender<AgentChatEvent>,
+    event_tx: SharedEventTx,
 }
 
 #[async_trait::async_trait(?Send)]
@@ -145,29 +145,30 @@ impl acp::Client for AcpClient {
     }
 
     async fn session_notification(&self, args: acp::SessionNotification) -> acp::Result<()> {
+        let tx = self.event_tx.borrow();
         match args.update {
             acp::SessionUpdate::AgentMessageChunk(chunk) => {
                 let text = match chunk.content {
                     acp::ContentBlock::Text(t) => t.text,
                     other => format!("{other:?}"),
                 };
-                let _ = self.event_tx.send(AgentChatEvent::MessageChunk { content: text });
+                let _ = tx.send(AgentChatEvent::MessageChunk { content: text });
             }
             acp::SessionUpdate::AgentThoughtChunk(chunk) => {
                 let text = match chunk.content {
                     acp::ContentBlock::Text(t) => t.text,
                     other => format!("{other:?}"),
                 };
-                let _ = self.event_tx.send(AgentChatEvent::ThoughtChunk { content: text });
+                let _ = tx.send(AgentChatEvent::ThoughtChunk { content: text });
             }
             acp::SessionUpdate::ToolCall(tc) => {
-                let _ = self.event_tx.send(AgentChatEvent::ToolCall {
+                let _ = tx.send(AgentChatEvent::ToolCall {
                     name: tc.title.clone(),
                     status: format!("{:?}", tc.status),
                 });
             }
             acp::SessionUpdate::ToolCallUpdate(tc) => {
-                let _ = self.event_tx.send(AgentChatEvent::ToolCall {
+                let _ = tx.send(AgentChatEvent::ToolCall {
                     name: tc.fields.title.clone().unwrap_or_default(),
                     status: format!("{:?}", tc.fields.status),
                 });
@@ -186,7 +187,7 @@ async fn acp_thread(
     args: Vec<String>,
     workspace_path: PathBuf,
     mut cmd_rx: mpsc::Receiver<AcpCommand>,
-    init_tx: oneshot::Sender<Result<(), String>>,
+    init_tx: std::sync::mpsc::Sender<Result<(), String>>,
 ) {
     // Spawn agent process.
     let child_result = tokio::process::Command::new(&program)
@@ -215,9 +216,10 @@ async fn acp_thread(
         }
     };
 
-    // Placeholder event_tx for the client (will be replaced per prompt).
+    // Shared event sender — swapped per prompt.
     let (placeholder_tx, _) = broadcast::channel::<AgentChatEvent>(1);
-    let client = AcpClient { event_tx: placeholder_tx };
+    let shared_tx: SharedEventTx = Rc::new(RefCell::new(placeholder_tx));
+    let client = AcpClient { event_tx: Rc::clone(&shared_tx) };
 
     let (conn, io_task) = acp::ClientSideConnection::new(client, stdin, stdout, |fut| {
         tokio::task::spawn_local(fut);
@@ -262,11 +264,9 @@ async fn acp_thread(
     while let Some(cmd) = cmd_rx.recv().await {
         match cmd {
             AcpCommand::Prompt(p) => {
-                // TODO: ideally we'd swap the event_tx on the client dynamically.
-                // For now, the client's placeholder_tx won't forward events.
-                // Events are sent from session_notification which holds the
-                // broadcast::Sender — we need to wire this properly.
-                // Workaround: we re-create the client per prompt below.
+                // Swap the shared event sender so notifications route to this prompt's channel.
+                *shared_tx.borrow_mut() = p.event_tx;
+
                 let result = conn
                     .prompt(acp::PromptRequest::new(
                         session.session_id.clone(),
