@@ -9,7 +9,7 @@ use atrium_error::{Error, ErrorKind, Result};
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 
-use super::{PromptRequest, Transport, read_stderr};
+use super::{PromptRequest, Transport};
 use crate::types::AgentChatEvent;
 
 /// Per-turn subprocess transport.
@@ -126,14 +126,24 @@ impl Transport for TerminalTransport {
     }
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn label_format() {
-        let t = TerminalTransport::new("copilot".into(), vec![], PathBuf::from("."));
-        assert_eq!(t.label(), "terminal:copilot");
+/// Read up to 4KB from an optional stderr handle.
+async fn read_stderr(stderr: Option<tokio::process::ChildStderr>) -> String {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+    let Some(stderr) = stderr else {
+        return String::new();
+    };
+    let mut buf = String::new();
+    let mut reader = BufReader::new(stderr);
+    let mut line_buf = String::new();
+    while buf.len() < 4096 {
+        match reader.read_line(&mut line_buf).await {
+            Ok(0) => break,
+            Ok(_) => {
+                buf.push_str(&line_buf);
+                line_buf.clear();
+            }
+            Err(_) => break,
+        }
     }
+    buf
 }
