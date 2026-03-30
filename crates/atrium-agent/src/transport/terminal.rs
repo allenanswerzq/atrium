@@ -21,7 +21,12 @@ pub struct TerminalTransport {
 }
 
 impl TerminalTransport {
-    pub fn new(program: String, base_args: Vec<String>, workspace_path: PathBuf, event_tx: EventSender) -> Self {
+    pub fn new(
+        program: String,
+        base_args: Vec<String>,
+        workspace_path: PathBuf,
+        event_tx: EventSender,
+    ) -> Self {
         Self {
             program,
             base_args,
@@ -65,16 +70,14 @@ impl Transport for TerminalTransport {
             .take()
             .ok_or_else(|| Error::new(ErrorKind::Io, "no stdout"))?;
         let mut lines = tokio::io::BufReader::new(stdout).lines();
-        let mut cancel_rx = req.cancel_rx;
+        let cancel = req.cancel;
 
         loop {
             tokio::select! {
                 biased;
-                _ = cancel_rx.changed() => {
-                    if *cancel_rx.borrow() {
-                        let _ = child.kill().await;
-                        return Err(Error::new(ErrorKind::Cancelled, "turn cancelled"));
-                    }
+                _ = cancel.cancelled() => {
+                    let _ = child.kill().await;
+                    return Err(Error::new(ErrorKind::Cancelled, "turn cancelled"));
                 }
                 line_result = lines.next_line() => {
                     match line_result {

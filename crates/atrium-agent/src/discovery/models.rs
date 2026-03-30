@@ -60,13 +60,11 @@ pub async fn discover_models(
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(
-            Error::new(
-                ErrorKind::Network,
-                format!("model discovery failed: HTTP {status}"),
-            )
-            .with_context("body", body),
-        );
+        return Err(Error::new(
+            ErrorKind::Network,
+            format!("model discovery failed: HTTP {status}"),
+        )
+        .with_context("body", body));
     }
 
     let payload: serde_json::Value = response.json().await.map_err(|e| {

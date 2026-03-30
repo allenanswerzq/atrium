@@ -14,6 +14,7 @@ use atrium_agent::transport::{self, PromptRequest, TransportConfig};
 use atrium_agent::types::{AgentChatEvent, ChatMessage};
 use atrium_executor::TaskManager;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 const BRIDGE_URL: &str = "http://localhost:5168/v1";
 
@@ -41,11 +42,9 @@ async fn prompt_and_collect(
     messages: &[ChatMessage],
     event_rx: &mut mpsc::UnboundedReceiver<AgentChatEvent>,
 ) -> String {
-    let (_cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
-
     let req = PromptRequest {
         messages,
-        cancel_rx,
+        cancel: CancellationToken::new(),
     };
 
     t.prompt(req).await.unwrap();
@@ -78,7 +77,9 @@ async fn bridge_openai_chat_completions() {
         model: Some("claude-sonnet-4".to_owned()),
     };
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
-    let t = transport::create(cfg, cwd, &executor, event_tx).await.unwrap();
+    let t = transport::create(cfg, cwd, &executor, event_tx)
+        .await
+        .unwrap();
 
     let messages = [user_message("Reply with exactly: CHAT_OK")];
     let text = prompt_and_collect(t.as_ref(), &messages, &mut event_rx).await;
@@ -106,7 +107,9 @@ async fn bridge_anthropic_messages() {
         model: Some("claude-sonnet-4".to_owned()),
     };
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
-    let t = transport::create(cfg, cwd, &executor, event_tx).await.unwrap();
+    let t = transport::create(cfg, cwd, &executor, event_tx)
+        .await
+        .unwrap();
 
     let messages = [user_message("Say hello in one word")];
     let text = prompt_and_collect(t.as_ref(), &messages, &mut event_rx).await;
@@ -134,7 +137,9 @@ async fn bridge_openai_responses() {
         model: Some("gpt-4.1".to_owned()),
     };
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
-    let t = transport::create(cfg, cwd, &executor, event_tx).await.unwrap();
+    let t = transport::create(cfg, cwd, &executor, event_tx)
+        .await
+        .unwrap();
 
     let messages = [user_message("Reply with exactly: RESPONSES_OK")];
     let text = prompt_and_collect(t.as_ref(), &messages, &mut event_rx).await;
@@ -162,7 +167,9 @@ async fn test_model(model: &str) {
         model: Some(model.to_owned()),
     };
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
-    let t = transport::create(cfg, cwd, &executor, event_tx).await.unwrap();
+    let t = transport::create(cfg, cwd, &executor, event_tx)
+        .await
+        .unwrap();
 
     let messages = [user_message("Say hello in one word")];
     let text = prompt_and_collect(t.as_ref(), &messages, &mut event_rx).await;

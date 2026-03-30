@@ -9,6 +9,7 @@ use atrium_error::{Error, ErrorKind, Result};
 
 use super::{EventSender, PromptRequest, Transport};
 use crate::types::AgentChatEvent;
+use tokio_util::sync::CancellationToken;
 
 /// Connect timeout for the HTTP client.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -25,7 +26,12 @@ pub struct OpenAiTransport {
 }
 
 impl OpenAiTransport {
-    pub fn new(base_url: String, api_key: Option<String>, model: Option<String>, event_tx: EventSender) -> Self {
+    pub fn new(
+        base_url: String,
+        api_key: Option<String>,
+        model: Option<String>,
+        event_tx: EventSender,
+    ) -> Self {
         let client = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .build()
@@ -81,9 +87,9 @@ impl Transport for OpenAiTransport {
         }
 
         let event_tx = self.event_tx.clone();
-        let mut cancel_rx = req.cancel_rx;
+        let cancel = req.cancel;
 
-        consume_sse_stream(response, &mut cancel_rx, |data| {
+        consume_sse_stream(response, &cancel, |data| {
             let value: serde_json::Value = match serde_json::from_str(data) {
                 Ok(v) => v,
                 Err(_) => return,
@@ -136,7 +142,7 @@ impl Transport for OpenAiTransport {
 /// Consume an SSE byte stream, calling `on_data` for each `data:` payload.
 async fn consume_sse_stream(
     response: reqwest::Response,
-    cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
+    cancel: &CancellationToken,
     mut on_data: impl FnMut(&str),
 ) -> Result<()> {
     use futures::StreamExt;
@@ -146,10 +152,8 @@ async fn consume_sse_stream(
     loop {
         tokio::select! {
             biased;
-            _ = cancel_rx.changed() => {
-                if *cancel_rx.borrow() {
-                    return Err(Error::new(ErrorKind::Cancelled, "turn cancelled"));
-                }
+            _ = cancel.cancelled() => {
+                return Err(Error::new(ErrorKind::Cancelled, "turn cancelled"));
             }
             chunk = tokio::time::timeout(CHUNK_IDLE_TIMEOUT, stream.next()) => {
                 let Ok(chunk_opt) = chunk else {

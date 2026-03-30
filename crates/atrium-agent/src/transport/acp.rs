@@ -335,10 +335,7 @@ impl AcpTransport {
         });
     }
 
-    fn handle_notification(
-        params: &serde_json::Value,
-        event_tx: &EventSender,
-    ) {
+    fn handle_notification(params: &serde_json::Value, event_tx: &EventSender) {
         let Some(update) = params.get("update") else {
             return;
         };
@@ -403,7 +400,7 @@ impl Transport for AcpTransport {
         let conn = Arc::clone(&self.conn);
         let session_id = self.session_id.clone();
         let text = req.last_user_message().to_owned();
-        let mut cancel_rx = req.cancel_rx;
+        let cancel = req.cancel;
 
         let prompt_fut = async move {
             conn.request(
@@ -421,12 +418,8 @@ impl Transport for AcpTransport {
                 result.map_err(|e| e.with_operation("acp::prompt"))?;
                 Ok(())
             }
-            _ = cancel_rx.changed() => {
-                if *cancel_rx.borrow() {
-                    Err(Error::new(ErrorKind::Cancelled, "turn cancelled"))
-                } else {
-                    Err(Error::new(ErrorKind::Unexpected, "cancel channel closed"))
-                }
+            _ = cancel.cancelled() => {
+                Err(Error::new(ErrorKind::Cancelled, "turn cancelled"))
             }
         }
     }

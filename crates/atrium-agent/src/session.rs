@@ -7,9 +7,12 @@ use std::sync::Arc;
 use atrium_error::{Error, ErrorKind, Result};
 use atrium_executor::TaskExecutor;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 use crate::kind::AgentKind;
-use crate::transport::{self, EventReceiver, EventSender, PromptRequest, Transport, TransportConfig};
+use crate::transport::{
+    self, EventReceiver, EventSender, PromptRequest, Transport, TransportConfig,
+};
 use crate::types::{
     AgentChatEvent, AgentChatStatus, AgentSessionId, AgentSessionSummary, ChatMessage,
 };
@@ -33,7 +36,7 @@ pub struct AgentChatSession {
     pub output_tokens: u64,
     pub turn_start_input_tokens: u64,
     pub turn_start_output_tokens: u64,
-    pub turn_cancel: Option<tokio::sync::watch::Sender<bool>>,
+    pub turn_cancel: Option<CancellationToken>,
     /// The transport used for this session — created once, reused across turns.
     transport: Arc<dyn Transport>,
 }
@@ -146,9 +149,13 @@ impl AgentChatManager {
     ) -> Result<(AgentSessionId, EventReceiver)> {
         let session_id = self.next_session_id();
         let (event_tx, event_rx) = mpsc::unbounded_channel::<AgentChatEvent>();
-        let transport =
-            transport::create(config, workspace_path.clone(), &self.executor, event_tx.clone())
-                .await?;
+        let transport = transport::create(
+            config,
+            workspace_path.clone(),
+            &self.executor,
+            event_tx.clone(),
+        )
+        .await?;
 
         let session = AgentChatSession {
             id: session_id.clone(),
@@ -183,11 +190,11 @@ impl AgentChatManager {
         });
     }
 
-    pub async fn send_message(
-        &mut self,
-        session_id: &AgentSessionId,
-        message: String,
-    ) -> Result<()> {
+    /// Send a prompt and wait for the turn to complete.
+    ///
+    /// Cancellation: call [`cancel()`](AgentChatManager::cancel) from another
+    /// task to abort this turn via the shared `CancellationToken`.
+    pub async fn prompt(&mut self, session_id: &AgentSessionId, message: String) -> Result<()> {
         let session = self.get_session(session_id)?;
         if session.status == AgentChatStatus::Working {
             return Err(Error::new(
@@ -212,8 +219,8 @@ impl AgentChatManager {
         session.turn_start_output_tokens = session.output_tokens;
         let _ = session.event_tx.send(AgentChatEvent::TurnStarted);
 
-        let (cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
-        session.turn_cancel = Some(cancel_tx);
+        let cancel = CancellationToken::new();
+        session.turn_cancel = Some(cancel.clone());
 
         let transport = Arc::clone(&session.transport);
         let messages = session.messages.clone();
@@ -221,7 +228,7 @@ impl AgentChatManager {
 
         let req = PromptRequest {
             messages: &messages,
-            cancel_rx,
+            cancel,
         };
 
         match transport.prompt(req).await {
@@ -241,16 +248,16 @@ impl AgentChatManager {
 
     pub fn cancel(&mut self, session_id: &AgentSessionId) -> Result<()> {
         let session = self.get_session(session_id)?;
-        if let Some(cancel_tx) = session.turn_cancel.take() {
-            let _ = cancel_tx.send(true);
+        if let Some(cancel) = session.turn_cancel.take() {
+            cancel.cancel();
         }
         Ok(())
     }
 
     pub fn kill(&mut self, session_id: &AgentSessionId) -> Result<()> {
         let session = self.get_session(session_id)?;
-        if let Some(cancel_tx) = session.turn_cancel.take() {
-            let _ = cancel_tx.send(true);
+        if let Some(cancel) = session.turn_cancel.take() {
+            cancel.cancel();
         }
         let transport = Arc::clone(&session.transport);
         session.status = AgentChatStatus::Exited;
@@ -262,9 +269,9 @@ impl AgentChatManager {
     }
 
     pub fn remove(&mut self, session_id: &AgentSessionId) {
-        if let Some(mut session) = self.sessions.remove(session_id) {
-            if let Some(cancel_tx) = session.turn_cancel.take() {
-                let _ = cancel_tx.send(true);
+        if let Some(session) = self.sessions.remove(session_id) {
+            if let Some(cancel) = &session.turn_cancel {
+                cancel.cancel();
             }
             self.shutdown_transport(Arc::clone(&session.transport));
         }

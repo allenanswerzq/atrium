@@ -10,6 +10,7 @@ use atrium_error::{Error, ErrorKind, Result};
 
 use super::{EventSender, PromptRequest, Transport};
 use crate::types::AgentChatEvent;
+use tokio_util::sync::CancellationToken;
 
 /// Connect timeout for the HTTP client.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -26,7 +27,12 @@ pub struct ResponsesTransport {
 }
 
 impl ResponsesTransport {
-    pub fn new(base_url: String, api_key: Option<String>, model: Option<String>, event_tx: EventSender) -> Self {
+    pub fn new(
+        base_url: String,
+        api_key: Option<String>,
+        model: Option<String>,
+        event_tx: EventSender,
+    ) -> Self {
         let client = reqwest::Client::builder()
             .connect_timeout(CONNECT_TIMEOUT)
             .build()
@@ -81,9 +87,9 @@ impl Transport for ResponsesTransport {
         }
 
         let event_tx = self.event_tx.clone();
-        let mut cancel_rx = req.cancel_rx;
+        let cancel = req.cancel;
 
-        consume_responses_sse(response, &mut cancel_rx, &event_tx).await
+        consume_responses_sse(response, &cancel, &event_tx).await
     }
 
     async fn shutdown(&self) {
@@ -103,7 +109,7 @@ impl Transport for ResponsesTransport {
 /// - `response.output_text.done` with full text
 async fn consume_responses_sse(
     response: reqwest::Response,
-    cancel_rx: &mut tokio::sync::watch::Receiver<bool>,
+    cancel: &CancellationToken,
     event_tx: &EventSender,
 ) -> Result<()> {
     use futures::StreamExt;
@@ -114,10 +120,8 @@ async fn consume_responses_sse(
     loop {
         tokio::select! {
             biased;
-            _ = cancel_rx.changed() => {
-                if *cancel_rx.borrow() {
-                    return Err(Error::new(ErrorKind::Cancelled, "turn cancelled"));
-                }
+            _ = cancel.cancelled() => {
+                return Err(Error::new(ErrorKind::Cancelled, "turn cancelled"));
             }
             chunk = tokio::time::timeout(CHUNK_IDLE_TIMEOUT, stream.next()) => {
                 let Ok(chunk_opt) = chunk else {

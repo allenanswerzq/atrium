@@ -9,10 +9,10 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
+use atrium_agent::AgentKind;
 use atrium_agent::discovery::{discover_agents, discover_models, is_installed};
 use atrium_agent::session::AgentChatManager;
 use atrium_agent::types::{AgentChatEvent, AgentChatStatus};
-use atrium_agent::AgentKind;
 use atrium_executor::TaskManager;
 
 async fn drain_turn(rx: &mut mpsc::UnboundedReceiver<AgentChatEvent>, secs: u64) -> String {
@@ -99,7 +99,10 @@ async fn managed_copilot_lifecycle() {
 
     // 3. Verify copilot is now running
     let running = discover_agents();
-    let copilot_procs: Vec<_> = running.iter().filter(|a| a.kind == AgentKind::Copilot).collect();
+    let copilot_procs: Vec<_> = running
+        .iter()
+        .filter(|a| a.kind == AgentKind::Copilot)
+        .collect();
     println!("copilot processes running: {}", copilot_procs.len());
     assert!(
         !copilot_procs.is_empty(),
@@ -107,7 +110,7 @@ async fn managed_copilot_lifecycle() {
     );
 
     // 4. Send a message and receive response
-    mgr.send_message(&id, "Reply with exactly: LIFECYCLE_OK".into())
+    mgr.prompt(&id, "Reply with exactly: LIFECYCLE_OK".into())
         .await
         .unwrap();
 

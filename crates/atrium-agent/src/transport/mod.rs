@@ -24,6 +24,7 @@ use std::path::PathBuf;
 use atrium_error::Result;
 use atrium_executor::TaskExecutor;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 
 use crate::types::{AgentChatEvent, ChatMessage};
 
@@ -33,8 +34,8 @@ use crate::types::{AgentChatEvent, ChatMessage};
 pub struct PromptRequest<'a> {
     /// Full conversation history (including the current user message as last entry).
     pub messages: &'a [ChatMessage],
-    /// Cancel signal — send `true` to abort the current turn.
-    pub cancel_rx: tokio::sync::watch::Receiver<bool>,
+    /// Cancellation token — cancelled to abort the current turn.
+    pub cancel: CancellationToken,
 }
 
 impl<'a> PromptRequest<'a> {
@@ -149,7 +150,8 @@ pub async fn create(
 ) -> Result<Box<dyn Transport>> {
     match config {
         TransportConfig::Acp { program, args } => {
-            let t = acp::AcpTransport::spawn(program, args, workspace_path, executor, event_tx).await?;
+            let t =
+                acp::AcpTransport::spawn(program, args, workspace_path, executor, event_tx).await?;
             Ok(Box::new(t))
         }
         TransportConfig::Terminal { program, base_args } => {

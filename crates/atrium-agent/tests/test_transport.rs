@@ -6,10 +6,10 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
+use atrium_agent::AgentKind;
 use atrium_agent::session::AgentChatManager;
 use atrium_agent::transport::TransportConfig;
 use atrium_agent::types::{AgentChatEvent, AgentChatStatus, ChatMessage};
-use atrium_agent::AgentKind;
 use atrium_executor::TaskManager;
 
 fn new_test_manager() -> (AgentChatManager, TaskManager) {
@@ -91,7 +91,7 @@ async fn event_sequence_on_failed_turn() {
         .create_with_config(AgentKind::Copilot, ".".into(), None, cfg)
         .await
         .unwrap();
-    mgr.send_message(&id, "hello".into()).await.unwrap();
+    mgr.prompt(&id, "hello".into()).await.unwrap();
 
     let mut events = Vec::new();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
@@ -118,6 +118,100 @@ async fn event_sequence_on_failed_turn() {
             .any(|e| matches!(e, AgentChatEvent::Error { .. }))
     );
     assert!(matches!(events.last(), Some(AgentChatEvent::TurnCompleted)));
+}
+
+#[tokio::test]
+async fn cancel_terminal_turn() {
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    let (mgr, _tm) = new_test_manager();
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    // Use a command that runs forever (ping -t on Windows).
+    let cfg = TransportConfig::Terminal {
+        program: "ping".into(),
+        base_args: vec!["-t".into(), "127.0.0.1".into()],
+    };
+    let (id, mut rx) = mgr
+        .lock()
+        .await
+        .create_with_config(AgentKind::Copilot, ".".into(), None, cfg)
+        .await
+        .unwrap();
+
+    // Spawn the prompt in a background task.
+    let mgr2 = Arc::clone(&mgr);
+    let id2 = id.clone();
+    let prompt_task =
+        tokio::spawn(async move { mgr2.lock().await.prompt(&id2, "ignored".into()).await });
+
+    // Wait for the process to start, then cancel.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let start = std::time::Instant::now();
+    mgr.lock().await.cancel(&id).unwrap();
+    let _ = prompt_task.await;
+    let elapsed = start.elapsed();
+
+    println!("cancel took {elapsed:?}");
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "cancel was too slow: {elapsed:?}"
+    );
+
+    // Should have received events.
+    let mut got_error = false;
+    let mut got_completed = false;
+    while let Ok(ev) = rx.try_recv() {
+        match ev {
+            AgentChatEvent::Error { .. } => got_error = true,
+            AgentChatEvent::TurnCompleted => got_completed = true,
+            _ => {}
+        }
+    }
+    assert!(
+        got_error || got_completed,
+        "expected Error or TurnCompleted after cancel"
+    );
+}
+
+#[tokio::test]
+async fn cancel_via_manager() {
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    let (mgr, _tm) = new_test_manager();
+    let mgr = Arc::new(Mutex::new(mgr));
+
+    let cfg = TransportConfig::Terminal {
+        program: "ping".into(),
+        base_args: vec!["-t".into(), "127.0.0.1".into()],
+    };
+    let (id, mut rx) = mgr
+        .lock()
+        .await
+        .create_with_config(AgentKind::Copilot, ".".into(), None, cfg)
+        .await
+        .unwrap();
+
+    // Spawn prompt in background, cancel from main task.
+    let mgr2 = Arc::clone(&mgr);
+    let id2 = id.clone();
+    let prompt_task =
+        tokio::spawn(async move { mgr2.lock().await.prompt(&id2, "ignored".into()).await });
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    mgr.lock().await.cancel(&id).unwrap();
+    let _ = prompt_task.await;
+
+    // Verify completion events.
+    let mut got_completed = false;
+    while let Ok(ev) = rx.try_recv() {
+        if matches!(ev, AgentChatEvent::TurnCompleted) {
+            got_completed = true;
+        }
+    }
+    assert!(got_completed, "expected TurnCompleted after manager cancel");
 }
 
 #[tokio::test]
@@ -188,7 +282,7 @@ async fn copilot_terminal_single_turn() {
         .await
         .unwrap();
 
-    mgr.send_message(&id, "Reply with exactly: TERMINAL_OK".into())
+    mgr.prompt(&id, "Reply with exactly: TERMINAL_OK".into())
         .await
         .unwrap();
     let text = drain_turn(&mut rx, 60).await;
@@ -201,7 +295,7 @@ async fn copilot_acp_single_turn() {
     let (mut mgr, _tm) = new_test_manager();
     let (id, mut rx) = mgr.create(AgentKind::Copilot, cwd, None).await.unwrap();
 
-    mgr.send_message(&id, "Reply with exactly: ACP_SINGLE_OK".into())
+    mgr.prompt(&id, "Reply with exactly: ACP_SINGLE_OK".into())
         .await
         .unwrap();
     let text = drain_turn(&mut rx, 120).await;
@@ -215,7 +309,7 @@ async fn copilot_acp_multi_turn() {
     let (id, mut rx) = mgr.create(AgentKind::Copilot, cwd, None).await.unwrap();
 
     // Turn 1: tell it a secret.
-    mgr.send_message(&id, "Remember this code word: MANGO".into())
+    mgr.prompt(&id, "Remember this code word: MANGO".into())
         .await
         .unwrap();
     let t1 = drain_turn(&mut rx, 120).await;
@@ -231,7 +325,7 @@ async fn copilot_acp_multi_turn() {
     }
 
     // Turn 2: agent should remember via ACP session.
-    mgr.send_message(&id, "What code word did I tell you?".into())
+    mgr.prompt(&id, "What code word did I tell you?".into())
         .await
         .unwrap();
     let t2 = drain_turn(&mut rx, 120).await;
@@ -270,6 +364,7 @@ fn kind_default_acp_falls_back_when_needed() {
 #[tokio::test(flavor = "multi_thread")]
 async fn copilot_acp_100_sessions() {
     use atrium_agent::transport::{self, PromptRequest};
+    use tokio_util::sync::CancellationToken;
 
     const N: usize = 100;
     let cwd = std::env::current_dir().unwrap();
@@ -303,13 +398,13 @@ async fn copilot_acp_100_sessions() {
                 model_id: None,
                 transport_label: None,
             }];
-            let (_cancel_tx, cancel_rx) = tokio::sync::watch::channel(false);
-
             let req = PromptRequest {
                 messages: &messages,
-                cancel_rx,
+                cancel: CancellationToken::new(),
             };
-            t.prompt(req).await.unwrap_or_else(|e| panic!("session {i} prompt failed: {e}"));
+            t.prompt(req)
+                .await
+                .unwrap_or_else(|e| panic!("session {i} prompt failed: {e}"));
 
             // Collect all message chunks from the mpsc receiver.
             let mut text = String::new();

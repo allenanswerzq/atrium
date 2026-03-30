@@ -17,7 +17,9 @@ pub mod transport;
 pub mod types;
 
 pub use atrium_error::{Error, ErrorKind, Result};
-pub use discovery::{DiscoveredAgent, DiscoveredModel, discover_agents, discover_models, is_installed};
+pub use discovery::{
+    DiscoveredAgent, DiscoveredModel, discover_agents, discover_models, is_installed,
+};
 pub use kind::AgentKind;
 pub use session::{AgentChatManager, AgentChatSession};
 pub use transport::{EventReceiver, EventSender, Transport, TransportConfig};
