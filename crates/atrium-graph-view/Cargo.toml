@@ -1,0 +1,13 @@
+[package]
+name = "atrium-graph-view"
+description = "Graph view visual specification — the schema for architecture visualization"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde      = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

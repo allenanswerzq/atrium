@@ -1,6 +1,6 @@
 [package]
-name = "atrium-agent"
-description = "Agent chat sessions, presets, and transport backends for Atrium"
+name = "atrium-agent-sdk"
+description = "Agent chat SDK — sessions, transports, and discovery for AI coding agents"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

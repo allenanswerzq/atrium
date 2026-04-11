@@ -9,10 +9,10 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
-use atrium_agent::AgentKind;
-use atrium_agent::discovery::{discover_agents, discover_models, is_installed};
-use atrium_agent::session::AgentChatManager;
-use atrium_agent::types::{AgentChatEvent, AgentChatStatus};
+use atrium_agent_sdk::AgentKind;
+use atrium_agent_sdk::discovery::{discover_agents, discover_models, is_installed};
+use atrium_agent_sdk::session::AgentChatManager;
+use atrium_agent_sdk::types::{AgentChatEvent, AgentChatStatus};
 use atrium_executor::TaskManager;
 
 async fn drain_turn(rx: &mut mpsc::UnboundedReceiver<AgentChatEvent>, secs: u64) -> String {

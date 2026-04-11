@@ -10,8 +10,8 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use atrium_agent::transport::{self, PromptRequest, TransportConfig};
-use atrium_agent::types::{AgentChatEvent, ChatMessage};
+use atrium_agent_sdk::transport::{self, PromptRequest, TransportConfig};
+use atrium_agent_sdk::types::{AgentChatEvent, ChatMessage};
 use atrium_executor::TaskManager;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -38,7 +38,7 @@ fn user_message(content: &str) -> ChatMessage {
 
 /// Helper: run a prompt through a transport and collect response text.
 async fn prompt_and_collect(
-    t: &dyn atrium_agent::Transport,
+    t: &dyn atrium_agent_sdk::Transport,
     messages: &[ChatMessage],
     event_rx: &mut mpsc::UnboundedReceiver<AgentChatEvent>,
 ) -> String {

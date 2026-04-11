@@ -1,0 +1,28 @@
+[package]
+name = "atrium-agents"
+description = "Built-in agents — Architecture Agent and other domain-specific agents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+atrium-agent-sdk  = { workspace = true }
+atrium-graph-view = { workspace = true }
+atrium-error      = { workspace = true }
+atrium-executor   = { workspace = true }
+
+serde      = { workspace = true }
+serde_json = { workspace = true }
+tokio      = { workspace = true, features = ["sync"] }
+tokio-util = { workspace = true }
+tracing    = { workspace = true }
+
+[dev-dependencies]
+atrium-agent-sdk = { workspace = true }
+atrium-executor  = { workspace = true }
+atrium-graph-view = { workspace = true }
+reqwest    = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true

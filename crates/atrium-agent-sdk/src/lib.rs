@@ -1,4 +1,4 @@
-//! # atrium-agent
+//! # atrium-agent-sdk
 //!
 //! Agent chat sessions and transport backends.
 //!

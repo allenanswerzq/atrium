@@ -431,7 +431,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "atrium-agent"
+name = "atrium-agent-sdk"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -448,6 +448,22 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "which 7.0.3",
+]
+
+[[package]]
+name = "atrium-agents"
+version = "0.1.0"
+dependencies = [
+ "atrium-agent-sdk",
+ "atrium-error",
+ "atrium-executor",
+ "atrium-graph-view",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]
@@ -509,6 +525,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "atrium-graph-view"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "atrium-gui"
 version = "0.1.0"
 dependencies = [
@@ -517,6 +541,7 @@ dependencies = [
  "atrium-error",
  "atrium-executor",
  "atrium-fs",
+ "atrium-graph-view",
  "atrium-io",
  "atrium-platform",
  "atrium-terminal",

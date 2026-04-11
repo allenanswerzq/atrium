@@ -3,8 +3,9 @@
 //! Thin shell that owns components and delegates rendering.
 //! Terminal logic lives in `atrium-terminal`; this module wires it to GPUI.
 
-use gpui::{Context, FocusHandle, KeyDownEvent, Render, Window, div, prelude::*, px, rgb};
+use gpui::{Context, Entity, FocusHandle, KeyDownEvent, Render, Window, div, prelude::*, px, rgb};
 
+use crate::components::graph_view::GraphViewPanel;
 use crate::terminal::rendering;
 use crate::theme::ThemeState;
 use atrium_core::theme::ThemePalette;
@@ -15,6 +16,7 @@ use atrium_terminal::{TerminalSession, terminal_escape_bytes};
 pub struct AtriumWindow {
     theme: ThemeState,
     session: Option<TerminalSession>,
+    graph_view: Entity<GraphViewPanel>,
     focus: FocusHandle,
     poller_started: bool,
 }
@@ -33,9 +35,12 @@ impl AtriumWindow {
         let session =
             TerminalSession::spawn_standalone(id, wid, cwd, &shell, "Terminal 1", 120, 40).ok();
 
+        let graph_view = cx.new(GraphViewPanel::new);
+
         Self {
             theme: ThemeState::default(),
             session,
+            graph_view,
             focus: cx.focus_handle(),
             poller_started: false,
         }
@@ -119,7 +124,6 @@ impl AtriumWindow {
 
 impl Render for AtriumWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.ensure_poller(cx);
         let palette = self.theme.palette();
 
         if !self.focus.is_focused(window) {
@@ -131,12 +135,9 @@ impl Render for AtriumWindow {
             .size_full()
             .flex()
             .flex_col()
-            .bg(rgb(palette.app_bg))
+            .bg(rgb(0xFFFFFFu32))
             .text_color(rgb(palette.text_primary))
-            .on_key_down(cx.listener(Self::handle_key_down))
-            .child(self.render_tab_bar(&palette))
-            .child(self.render_terminal_area(&palette))
-            .child(self.render_status_bar(&palette))
+            .child(self.graph_view.clone())
     }
 }
 

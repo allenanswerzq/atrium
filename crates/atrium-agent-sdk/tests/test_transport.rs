@@ -6,10 +6,10 @@ use std::time::Duration;
 
 use tokio::sync::mpsc;
 
-use atrium_agent::AgentKind;
-use atrium_agent::session::AgentChatManager;
-use atrium_agent::transport::TransportConfig;
-use atrium_agent::types::{AgentChatEvent, AgentChatStatus, ChatMessage};
+use atrium_agent_sdk::AgentKind;
+use atrium_agent_sdk::session::AgentChatManager;
+use atrium_agent_sdk::transport::TransportConfig;
+use atrium_agent_sdk::types::{AgentChatEvent, AgentChatStatus, ChatMessage};
 use atrium_executor::TaskManager;
 
 fn new_test_manager() -> (AgentChatManager, TaskManager) {
@@ -363,7 +363,7 @@ fn kind_default_acp_falls_back_when_needed() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn copilot_acp_100_sessions() {
-    use atrium_agent::transport::{self, PromptRequest};
+    use atrium_agent_sdk::transport::{self, PromptRequest};
     use tokio_util::sync::CancellationToken;
 
     const N: usize = 100;
