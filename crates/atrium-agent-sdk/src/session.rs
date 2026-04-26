@@ -28,6 +28,7 @@ pub struct AgentChatSession {
     pub workspace_path: PathBuf,
     pub model_id: Option<String>,
     pub event_tx: EventSender,
+    // TODO(zhang): disk based message history
     pub messages: Vec<ChatMessage>,
     pub pending_text: String,
     pub pending_tool_calls: Vec<String>,

@@ -89,6 +89,9 @@ impl Transport for OpenAiTransport {
         let event_tx = self.event_tx.clone();
         let cancel = req.cancel;
 
+        // Track function names for tool call deltas across SSE events.
+        let mut tool_names: Vec<Option<String>> = Vec::new();
+
         consume_sse_stream(response, &cancel, |data| {
             let value: serde_json::Value = match serde_json::from_str(data) {
                 Ok(v) => v,
@@ -104,6 +107,45 @@ impl Transport for OpenAiTransport {
                     let _ = event_tx.send(AgentChatEvent::MessageChunk {
                         content: delta.to_owned(),
                     });
+                }
+            }
+
+            // Tool call deltas — emitted when the model invokes a function.
+            if let Some(tcs) = value
+                .pointer("/choices/0/delta/tool_calls")
+                .and_then(|v| v.as_array())
+            {
+                for tc in tcs {
+                    let idx = tc.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+                    // First delta for this index carries the function name.
+                    if let Some(name) = tc
+                        .pointer("/function/name")
+                        .and_then(|v| v.as_str())
+                    {
+                        if tool_names.len() <= idx {
+                            tool_names.resize(idx + 1, None);
+                        }
+                        tool_names[idx] = Some(name.to_owned());
+                        let _ = event_tx.send(AgentChatEvent::ToolCall {
+                            name: name.to_owned(),
+                            status: "started".to_owned(),
+                        });
+                    }
+                }
+            }
+
+            // finish_reason — emit completion for any active tool calls.
+            if let Some(reason) = value
+                .pointer("/choices/0/finish_reason")
+                .and_then(|v| v.as_str())
+            {
+                if reason == "tool_calls" || reason == "function_call" {
+                    for name in tool_names.drain(..).flatten() {
+                        let _ = event_tx.send(AgentChatEvent::ToolCall {
+                            name,
+                            status: "completed".to_owned(),
+                        });
+                    }
                 }
             }
 

@@ -105,6 +105,8 @@ impl Transport for ResponsesTransport {
 ///
 /// The Responses API emits events like:
 /// - `response.output_text.delta` with `delta` field for text
+/// - `response.function_call_arguments.start` for tool call start
+/// - `response.function_call_arguments.done` for tool call completion
 /// - `response.completed` signals the end
 /// - `response.output_text.done` with full text
 async fn consume_responses_sse(
@@ -116,6 +118,8 @@ async fn consume_responses_sse(
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
     let mut current_event = String::new();
+    // Track the active function call name so we can pair start/done.
+    let mut active_fn_name: Option<String> = None;
 
     loop {
         tokio::select! {
@@ -156,6 +160,36 @@ async fn consume_responses_sse(
                     };
 
                     match current_event.as_str() {
+                        "response.output_item.added" => {
+                            // When a function_call output item is added,
+                            // capture its name and emit a started event.
+                            if value.get("type").and_then(|v| v.as_str()) == Some("function_call")
+                                || value
+                                    .pointer("/item/type")
+                                    .and_then(|v| v.as_str())
+                                    == Some("function_call")
+                            {
+                                let item = value.get("item").unwrap_or(&value);
+                                let name = item
+                                    .get("name")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("tool")
+                                    .to_owned();
+                                let _ = event_tx.send(AgentChatEvent::ToolCall {
+                                    name: name.clone(),
+                                    status: "started".to_owned(),
+                                });
+                                active_fn_name = Some(name);
+                            }
+                        }
+                        "response.function_call_arguments.done" => {
+                            if let Some(name) = active_fn_name.take() {
+                                let _ = event_tx.send(AgentChatEvent::ToolCall {
+                                    name,
+                                    status: "completed".to_owned(),
+                                });
+                            }
+                        }
                         "response.output_text.delta" => {
                             if let Some(text) = value.get("delta").and_then(|v| v.as_str()) {
                                 if !text.is_empty() {

@@ -112,7 +112,9 @@ impl Transport for AnthropicTransport {
 /// Consume an Anthropic SSE stream.
 ///
 /// Anthropic SSE uses `event:` lines to distinguish event types:
+/// - `content_block_start` with `content_block.type == "tool_use"` for tool calls
 /// - `content_block_delta` with `delta.text` for text chunks
+/// - `content_block_stop` signals the end of a content block
 /// - `message_delta` with `usage` for token counts
 /// - `message_stop` signals completion
 async fn consume_anthropic_sse(
@@ -124,6 +126,9 @@ async fn consume_anthropic_sse(
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
     let mut current_event = String::new();
+    // Track the name of the current tool_use block so we can emit
+    // a completion event when the block ends.
+    let mut active_tool_name: Option<String> = None;
 
     loop {
         tokio::select! {
@@ -162,6 +167,30 @@ async fn consume_anthropic_sse(
                     };
 
                     match current_event.as_str() {
+                        "content_block_start" => {
+                            if let Some(cb) = value.get("content_block") {
+                                if cb.get("type").and_then(|v| v.as_str()) == Some("tool_use") {
+                                    let name = cb
+                                        .get("name")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("tool")
+                                        .to_owned();
+                                    let _ = event_tx.send(AgentChatEvent::ToolCall {
+                                        name: name.clone(),
+                                        status: "started".to_owned(),
+                                    });
+                                    active_tool_name = Some(name);
+                                }
+                            }
+                        }
+                        "content_block_stop" => {
+                            if let Some(name) = active_tool_name.take() {
+                                let _ = event_tx.send(AgentChatEvent::ToolCall {
+                                    name,
+                                    status: "completed".to_owned(),
+                                });
+                            }
+                        }
                         "content_block_delta" => {
                             if let Some(text) = value
                                 .pointer("/delta/text")
